@@ -1,13 +1,16 @@
 """
-Vector-based voicing engine.
+Vector-based voicing engine v3.
 
-Core idea from Tymoczko's Geometry of Music:
+v2: min ||d|| subject to no parallel 5ths/8ves → "correct but bland"
+v3: multi-objective scoring → tendency resolution + contrary motion + melodic quality
+
+Core math (Tymoczko):
   - Chord = point in Z^n
   - Voice leading = displacement vector d = v2 - v1
-  - Good voice leading = min ||d|| subject to constraints
-  - Parallel fifths/octaves = forbidden directions in displacement space
-
-Replaces ad-hoc voicing with exhaustive search over all valid voicings.
+  - Good voice leading = MULTI-OBJECTIVE optimization:
+      minimize: total_displacement + tendency_penalty + melodic_penalty
+      maximize: contrary_motion + voice_independence
+      subject to: no parallel 5ths/8ves, spacing constraints
 """
 import numpy as np
 from itertools import product as cartesian_product
@@ -21,6 +24,114 @@ PERFECT_OCTAVE = 0  # mod 12
 # ── Default ranges (MIDI note numbers) ──
 UPPER_LOW = 55   # G3 — keep upper voices in a musical range
 UPPER_HIGH = 79  # G5
+
+
+# ═══════════════════════════════════════════════════════════════
+# Section 0: Musical scoring helpers (NEW in v3)
+# ═══════════════════════════════════════════════════════════════
+
+def _chromatic_pull(old_pc: int, next_chord_pcs: set) -> tuple | None:
+    """
+    Does a pitch class have chromatic gravity toward the next chord?
+
+    If exactly one of its semitone neighbors is in the next chord,
+    that's a tendency tone with a clear resolution direction.
+
+    Captures: leading tone → tonic, chordal 7th → down,
+    secondary leading tones, augmented 6th resolutions, etc.
+    All from one simple principle: half-step proximity = pull.
+
+    Returns: (target_pc, direction) or None
+    """
+    if old_pc in next_chord_pcs:
+        return None  # common tone — no tendency
+    up = (old_pc + 1) % 12
+    down = (old_pc - 1) % 12
+    up_in = up in next_chord_pcs
+    down_in = down in next_chord_pcs
+    if up_in and not down_in:
+        return (up, +1)
+    if down_in and not up_in:
+        return (down, -1)
+    return None  # ambiguous or no pull
+
+
+# Melodic interval penalties (absolute semitones → cost)
+# Stepwise (1-2) = ideal, thirds = ok, tritone/7th = bad
+_MELODIC_COST = {
+    0: 0, 1: 0, 2: 0,      # unison, m2, M2
+    3: 1, 4: 1,              # m3, M3
+    5: 2,                    # P4
+    6: 9,                    # tritone — worst melodic interval
+    7: 3,                    # P5
+    8: 4, 9: 5,              # m6, M6
+    10: 9, 11: 10,           # m7, M7 — very bad
+    12: 4,                   # P8 — acceptable but not ideal
+}
+
+
+def _tendency_score(prev_upper, new_upper, next_all_pcs, new_bass_pc):
+    """
+    Penalize voicings that don't resolve chromatic tendency tones.
+
+    v3.1 fix: Two-level check.
+    1. Is the target PC present ANYWHERE in the new chord (bass + upper)?
+       If missing entirely → heavy penalty (the resolution note is gone)
+    2. Did THIS specific voice resolve directly?
+       Direct resolution → big bonus (rewards proper voice leading)
+       Target present elsewhere → mild penalty (resolution exists but voice drifted)
+
+    This fixes the "bass covers" bug where soprano B→G was unpunished
+    because C was already in the bass.
+    """
+    new_full_pcs = set(int(n) % 12 for n in new_upper) | {new_bass_pc}
+    score = 0
+    for i, old in enumerate(prev_upper):
+        pull = _chromatic_pull(int(old) % 12, next_all_pcs)
+        if pull is None:
+            continue
+        target_pc, direction = pull
+        # Level 1: is the target present at all?
+        if target_pc not in new_full_pcs:
+            score += 16      # target absent entirely — very bad
+            continue
+        # Level 2: did this voice resolve directly?
+        if i < len(new_upper):
+            new_pc = int(new_upper[i]) % 12
+            movement = int(new_upper[i]) - int(old)
+            if new_pc == target_pc and np.sign(movement) == direction:
+                score -= 5    # direct resolution in correct direction — ideal
+            elif new_pc == target_pc:
+                score -= 2    # right PC, questionable direction — still ok
+            else:
+                score += 2    # target present elsewhere, this voice wandered
+    return score
+
+
+def _contrary_score(prev_bass, new_bass, prev_sop, new_sop):
+    """
+    Prefer contrary motion between outer voices (bass & soprano).
+    Bach almost always moves them in opposite directions.
+    """
+    b_dir = np.sign(new_bass - prev_bass)
+    s_dir = np.sign(int(new_sop) - int(prev_sop))
+    if b_dir == 0 or s_dir == 0:
+        return 0           # one voice static → neutral
+    if b_dir == s_dir:
+        return 7           # similar motion → penalty
+    return -5              # contrary motion → bonus
+
+
+def _melodic_score(prev_upper, new_upper):
+    """
+    Penalize ugly melodic intervals in each voice.
+    Each voice should sound like a viable melody on its own.
+    """
+    total = 0
+    for old, new in zip(prev_upper, new_upper):
+        interval = abs(int(new) - int(old))
+        total += _MELODIC_COST.get(interval, 16)  # >octave = 16
+    return total
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -149,16 +260,18 @@ def find_best_voicing(
     low: int = UPPER_LOW,
     high: int = UPPER_HIGH,
     max_spacing: int = 12,
+    extra_scorer: callable = None,
 ) -> np.ndarray:
     """
     Find the optimal voicing for upper voices via exhaustive search.
 
+    v3: multi-objective scoring via extra_scorer callback.
+
     Algorithm:
       1. Enumerate all voicings of pitch_classes in [low, high]
       2. Filter: above bass, spacing OK
-      3. If prev exists: filter out parallel 5ths/8ves (check FULL chord
-         including bass, not just upper voices)
-      4. Score remaining by L1 distance to prev_upper (or compactness if no prev)
+      3. If prev exists: filter out parallel 5ths/8ves (full chord)
+      4. Score: L1 distance + extra_scorer(candidate) if provided
       5. Return the best
 
     Args:
@@ -168,6 +281,7 @@ def find_best_voicing(
         prev_bass: previous bass MIDI note (needed for full-chord parallel check)
         low, high: MIDI range for upper voices
         max_spacing: max semitones between adjacent voices
+        extra_scorer: callback(np.ndarray) → float for musical quality scoring
 
     Returns:
         numpy array of MIDI notes, sorted ascending
@@ -214,21 +328,20 @@ def find_best_voicing(
             valid = no_parallels
         # else: all options have parallels — keep all, pick closest
 
-    # Step 4: score and pick
+    # Step 4: multi-objective scoring
     if prev_upper is not None and len(prev_upper) > 0:
         def score(c):
             v = np.array(c)
             if len(v) == len(prev_upper):
-                # Primary: L1 distance (total voice movement)
                 l1 = np.sum(np.abs(v - prev_upper))
-                # Secondary: prefer compact voicing
                 span = v[-1] - v[0]
-                return l1 * 10 + span
+                base = l1 * 5 + span
+                # v3: add musical quality scoring
+                extra = extra_scorer(v) if extra_scorer else 0
+                return base + extra
             else:
-                # Different voice count — score by compactness
                 return (v[-1] - v[0]) * 10
     else:
-        # First chord — pick compact voicing in the center of range
         mid = (effective_low + high) / 2.0
 
         def score(c):
@@ -331,12 +444,30 @@ def voice_lead_progression(
         # 2. Ensure exactly n_upper pitch classes
         upper_pcs = _ensure_n_pcs(upper_pcs, n_upper, bass_pc, all_pcs)
 
-        # Find optimal voicing (now checks full chord including bass)
+        # Build multi-objective scorer (v3)
+        # Captures musical context from the previous chord
+        scorer = None
+        if prev_upper is not None:
+            # Compute pitch classes of current chord (the target)
+            _next_pcs = set(p.midi % 12 for p in rn.pitches)
+            _bass_pc = bass_pc
+            _pu = prev_upper      # previous upper voicing
+            _pb = prev_bass       # previous bass note
+
+            def scorer(candidate, _pu=_pu, _pb=_pb,
+                       _np=_next_pcs, _bpc=_bass_pc, _bm=bass_midi):
+                t = _tendency_score(_pu, candidate, _np, _bpc)
+                c = _contrary_score(_pb, _bm, int(_pu[-1]), int(candidate[-1]))
+                m = _melodic_score(_pu, candidate)
+                return t * 15 + c * 3 + m * 4
+
+        # Find optimal voicing (v3: multi-objective scoring)
         upper = find_best_voicing(
             upper_pcs, bass_midi, prev_upper,
             prev_bass=prev_bass,
             low=upper_range[0], high=upper_range[1],
             max_spacing=max_spacing,
+            extra_scorer=scorer,
         )
 
         full = sorted([bass_midi] + upper.tolist())
@@ -405,3 +536,130 @@ def validate_voice_led_progression(measures: list[dict],
               f"total {total_movement} over {total_transitions} transitions")
 
     return result
+
+
+# ═══════════════════════════════════════════════════════════════
+# Section 6: Comprehensive quality evaluation (NEW in v3)
+# ═══════════════════════════════════════════════════════════════
+
+VOICE_NAMES = ["Bass", "Tenor", "Alto", "Soprano"]
+
+
+def evaluate_quality(measures: list[dict], key_str: str = "C",
+                     verbose: bool = False) -> dict:
+    """
+    Comprehensive voice leading quality report.
+
+    Goes far beyond parallel checking — evaluates:
+    1. Parallel 5ths/8ves (hard errors)
+    2. Tendency tone resolution rate
+    3. Contrary motion rate (bass vs soprano)
+    4. Melodic interval quality per voice
+    5. Voice independence (inter-voice correlation)
+
+    These metrics tell you WHY something sounds good or bad.
+    """
+    n = len(measures)
+    parallel_errors = 0
+    tendency_total = 0
+    tendency_resolved = 0
+    contrary_count = 0
+    similar_count = 0
+    oblique_count = 0
+    melodic_intervals = [[] for _ in range(4)]  # B, T, A, S
+
+    for i in range(n - 1):
+        m1, m2 = measures[i], measures[i + 1]
+        v1 = np.array(m1["full_chord"])
+        v2 = np.array(m2["full_chord"])
+
+        # Parallels
+        if len(v1) == len(v2) and has_parallels(v1, v2):
+            parallel_errors += 1
+
+        # Voice trajectories
+        voices1 = [m1["bass"]] + m1["upper"]
+        voices2 = [m2["bass"]] + m2["upper"]
+
+        for v in range(min(len(voices1), len(voices2))):
+            melodic_intervals[v].append(abs(voices2[v] - voices1[v]))
+
+        # Contrary motion (bass vs soprano)
+        b_dir = np.sign(voices2[0] - voices1[0])
+        s_dir = np.sign(voices2[-1] - voices1[-1])
+        if b_dir != 0 and s_dir != 0:
+            if b_dir != s_dir:
+                contrary_count += 1
+            else:
+                similar_count += 1
+        else:
+            oblique_count += 1
+
+        # Tendency tone resolution
+        next_pcs = set(x % 12 for x in voices2)
+        for v in range(1, min(len(voices1), len(voices2))):
+            old_pc = voices1[v] % 12
+            pull = _chromatic_pull(old_pc, next_pcs)
+            if pull:
+                tendency_total += 1
+                target_pc, direction = pull
+                new_pc = voices2[v] % 12
+                movement = voices2[v] - voices1[v]
+                if new_pc == target_pc and np.sign(movement) == direction:
+                    tendency_resolved += 1
+
+    # Voice independence: correlation between voice contours
+    voice_trajs = []
+    for v in range(4):
+        traj = [([m["bass"]] + m["upper"])[min(v, len(m["upper"]))]
+                for m in measures]
+        voice_trajs.append(traj)
+
+    correlations = []
+    for i in range(4):
+        for j in range(i + 1, 4):
+            corr = np.corrcoef(voice_trajs[i], voice_trajs[j])[0, 1]
+            if not np.isnan(corr):
+                correlations.append((i, j, corr))
+
+    avg_corr = np.mean([abs(c) for _, _, c in correlations]) if correlations else 0
+    motion_total = contrary_count + similar_count
+    tend_rate = tendency_resolved / max(tendency_total, 1)
+    contr_rate = contrary_count / max(motion_total, 1)
+
+    report = {
+        "parallel_errors": parallel_errors,
+        "tendency_resolved": tendency_resolved,
+        "tendency_total": tendency_total,
+        "tendency_rate": round(tend_rate, 3),
+        "contrary_count": contrary_count,
+        "similar_count": similar_count,
+        "oblique_count": oblique_count,
+        "contrary_rate": round(contr_rate, 3),
+        "melodic_avg": [round(np.mean(mi), 1) if mi else 0
+                        for mi in melodic_intervals],
+        "melodic_max": [max(mi) if mi else 0
+                        for mi in melodic_intervals],
+        "voice_correlation_avg": round(avg_corr, 3),
+        "voice_correlations": [(i, j, round(c, 3))
+                               for i, j, c in correlations],
+    }
+
+    if verbose:
+        print("\n═══ Voice Leading Quality Report ═══")
+        print(f"  Parallel errors:    {parallel_errors}")
+        print(f"  Tendency resolved:  {tendency_resolved}/{tendency_total}"
+              f" ({tend_rate:.0%})")
+        print(f"  Contrary motion:    {contrary_count}/{motion_total}"
+              f" ({contr_rate:.0%})"
+              f"  [similar={similar_count}, oblique={oblique_count}]")
+        print(f"  Melodic avg (B/T/A/S): {report['melodic_avg']}")
+        print(f"  Melodic max (B/T/A/S): {report['melodic_max']}")
+        print(f"  Voice independence:  avg |r|={avg_corr:.3f}"
+              f"  (lower = more independent)")
+        for i, j, c in correlations:
+            bar = "█" * int(abs(c) * 20)
+            print(f"    {VOICE_NAMES[i]:8s}↔{VOICE_NAMES[j]:8s}: "
+                  f"r={c:+.3f}  {bar}")
+
+    return report

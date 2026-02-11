@@ -39,6 +39,26 @@ v2 引擎改进：
 - 交叉验证通过：numpy 引擎和 music21 VoiceLeadingQuartet 结果一致
 - Stats: avg 8.1 semitones/transition, total 268 over 33 transitions
 
+**第四次跑（multi-objective engine, v3.1）**：✓ **0 errors + 大幅提升音乐质量**
+
+v3 引擎诊断与改进：
+- **问题**：v2 虽然 0 errors，但听起来"平淡"。原因：min L1 ≠ 好音乐——缺少 tendency tone resolution、contrary motion、melodic quality
+- **v3 架构**：multi-objective scoring = L1 × 5 + tendency × 15 + contrary × 3 + melodic × 4
+- **v3.0 → v3.1 关键 bug fix**：`_tendency_score` 的 "bass covers" 逃逸——当 target PC 已在 bass 时给 0 penalty，导致 soprano B→G 而非 B→C（V7→I）。修复：改用 "target present in chord" 两级检查
+
+v3.1 vs v2 vs v3.0 对比：
+| Metric | v2 | v3.0 | v3.1 |
+|--------|-----|------|------|
+| Parallel errors | 0 | 0 | **0** |
+| Tendency resolved | — | 29/45 (64%) | **32/45 (71%)** |
+| Contrary motion | — | 10/18 (56%) | **14/17 (82%)** |
+| Voice independence | — | 0.389 | **0.363** |
+| Avg movement | 8.1 | ~8.5 | **8.8** |
+
+关键修复验证（V7→I at m.4→5）：
+- v3.0: S: B4→G4 ✗（leading tone 没解决）
+- v3.1: S: B4→C5 ✓（leading tone → tonic，step +1）
+
 ### 音频
 
 - `output.mid` — 可导入 GarageBand
@@ -64,10 +84,12 @@ v2 引擎改进：
 1. **LLM 在"选什么和弦"这个层面表现不错，但在"怎么排列声部"这个层面需要外部引擎。** 这完美验证了项目假设。
 2. **Voice leading 是一个向量优化问题**：chord = Z^n 中的点，voice leading = 位移向量 d = v2 - v1，good voice leading = min ||d|| subject to constraints（Tymoczko's Geometry of Music）。
 3. **穷举搜索 + 硬约束过滤在这个规模下完全可行**：34 bar progression，每个和弦几十到几百个候选 voicing，毫秒级完成。
+4. **min L1 ≠ 好音乐**：v2 的 L1-only 优化"正确但平淡"。好的 voice leading 是 multi-objective：tendency tone resolution（半音引力）、contrary motion（外声部反向）、melodic interval quality（每个声部像独立旋律）。
+5. **Sorted-position voice tracking 的天花板**：声部用排序位置追踪（最低=tenor, 最高=soprano），不追踪音乐身份。这导致 7th 解决有时落在错误声部。71% tendency resolution 可能接近此方法的上限，突破需要 voice identity tracking。
 
 ### 下一步
-1. ~~改进 voicing 算法~~ → ✓ DONE (core/voicing.py)
-2. Wayne 用 GarageBand 听 output.mid，反馈"听感"
-3. Tonnetz 可视化：把和声进行画在 Tonnetz 上，看 geometric 路径
-4. 对比 BWV 846 原曲的 voicing 和我们生成的 voicing
-5. 尝试更复杂的和声语言（更多 chromaticism、modal mixture）
+1. ~~改进 voicing 算法~~ → ✓ DONE v2 (0 errors)
+2. ~~Multi-objective scoring~~ → ✓ DONE v3.1 (tendency 71%, contrary 82%)
+3. Wayne 用 GarageBand 听 v3.1 的 output.mid，反馈"听感"
+4. ~~Tonnetz 可视化~~ → ✓ DONE (harmonic-geometry.jsx)
+5. **Fugue**：分析 BWV 846 Fugue → 构建 counterpoint 引擎 → LLM 生成 subject

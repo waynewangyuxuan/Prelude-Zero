@@ -31,11 +31,31 @@ Wayne — 独立开发者/音乐爱好者，在做一个 LLM 驱动的音乐生�
 - **关键分层**："选什么和弦"（LLM 擅长）vs "怎么排列声部"（需要规则引擎）
 - Pipeline 端到端跑通：Roman numeral → music21 → pretty_midi → MIDI → WAV
 
-### Voicing Engine (core/voicing.py) — 2026-02-10
+### Voicing Engine (core/voicing.py) — 2026-02-10/11
 - **核心思想**：Tymoczko's Geometry of Music — chord = Z^n 中的点, voice leading = displacement vector
-- **算法**：enumerate all voicings → hard constraints (spacing, above bass) → filter parallels (full chord) → min L1 distance
-- **结果**：34 bars, 33 transitions, 0 parallel errors. music21 交叉验证一致
+- **v2 算法**：enumerate all voicings → hard constraints → filter parallels (full chord) → min L1 distance → 0 errors 但"平淡"
+- **v3.1 算法**：multi-objective scoring = L1×5 + tendency×15 + contrary×3 + melodic×4
+  - `_chromatic_pull`: 半音邻居检测 → tendency tone 方向
+  - `_tendency_score`: 两级检查——target present in chord? + direct resolution bonus
+  - `_contrary_score`: 外声部反向运动偏好
+  - `_melodic_score`: 各声部旋律间隔质量（tritone/7th = 重罚）
+- **v3.1 结果**：0 errors, tendency 71%, contrary 82%, voice independence 0.363
+- **已知天花板**：sorted-position voice tracking 无法保证每个声部的 tendency 都在同一声部解决（需要 voice identity tracking）
 - **架构**：SATB 固定 4 声部, 和弦不够用 doubling 补
+
+### Experiment 002 发现 (2026-02-11)
+- **完整赋格 0 errors**：295 notes, 26 bars, 78s, 8 sections, **0 counterpoint errors**, 83 warnings
+- **Subject + Countersubject 配合 OK**：反向运动 + 节奏互补，0 errors
+- **赋格 = 代数结构 + 手工打磨**：Subject transformations 可靠，但 free counterpoint 需迭代修复
+- **Tonal answer 两区域设计 work**：head zone swap + tail zone real transposition，F#4 leading tone 保留
+- **Stretto 50% overlap work**：entry_delay=4.5 on 9-beat subject，G pedal bass 避免 errors
+- **Validate→fix→validate 循环有效**：从 9 errors 迭代到 0，oblique/contrary motion 是万能修复术
+- **调性走向 C→G→Am→F→C**：Exposition→Episodes→Middle Entries 的调性规划合理
+
+### Fugue Engine (core/fugue.py + core/counterpoint.py) — 2026-02-11
+- **core/fugue.py**: Subject 定义 + 5 种变换 + tonal/real answer + exposition assembly + quality evaluation
+- **core/counterpoint.py**: parallel 5ths/8ves, direct 5ths/8ves, consonance on strong beats, voice crossing, melodic intervals, gap-fill
+- **完整赋格结果**: 4 voices, 295 notes, 0 errors, 83 warnings
 
 ## Open Questions
 - ~~ABC vs musicpy vs pretty_midi 哪个做 LLM 输出格式最好？~~ → 决定用 Python 代码直接生成（music21 + pretty_midi）
@@ -44,9 +64,12 @@ Wayne — 独立开发者/音乐爱好者，在做一个 LLM 驱动的音乐生�
 - 华语 ballad 怎么 prompt 出好的 Royal Road 进行？
 - Synthesizer V vs ACE Studio？
 - GarageBand 够用还是需要 Logic？
-- ~~Voicing 算法怎么改进？~~ → ✓ 已解决：core/voicing.py（穷举搜索 + numpy 向量约束）
-- **NEW**: BWV 846 pattern 细节——5 voice 还是简化版？
-- **NEW**: Geometry of Music 路线——Tonnetz 可视化 + 风格签名 + 交互式作曲（详见 notes/geometry-of-harmony.md）
+- ~~Voicing 算法怎么改进？~~ → ✓ 已解决：core/voicing.py v3.1
+- ~~Countersubject 设计~~ → ✓ 已完成：反向运动 + 节奏互补，0 errors
+- ~~Episode generation~~ → ✓ 已完成：subject 片段 sequential motifs，3 episodes
+- ~~Stretto~~ → ✓ 已完成：50% overlap + G pedal bass
+- **NEW**: Humanize — velocity 曲线 + timing 微偏移，让赋格不机械
+- **NEW**: Pink Floyd 方向 — 巴赫 pipeline 已验证，开始探索 atmosphere/texture
 
 ## Terms
 | Term | Meaning |
