@@ -28,16 +28,16 @@ Section G (Resolution):    I → IV → V7 → I
 
 ### Voice Leading Validation
 
-**第一次跑（naive voicing）**：8 errors（平行五度 2, 平行八度 6）
-**第二次跑（smooth voice leading）**：3 errors + 14 spacing warnings
+**第一次跑（naive voicing, v1）**：8 errors（平行五度 2, 平行八度 6）
+**第二次跑（smooth voice leading, v1）**：3 errors + 14 spacing warnings
+**第三次跑（vector-based engine, v2）**：✓ **0 errors, 0 warnings**
 
-剩余 3 个错误：
-- m.3→4: IV→V 平行五度（bass F→G 与 upper C→D）
-- m.7→8: viio→iii 平行八度（F4→G4 与 F5→G5）
-- m.31→32: I→IV 平行八度（E4→F4 与 E6→F6）
-
-Spacing drift: 后半段（mm.21-34）上声部之间距离逐渐变大（最大 24 半音），
-说明 smooth voice leading 算法在处理 diminished 和弦和 pedal 段落时声部会漂移。
+v2 引擎改进：
+- 穷举搜索所有 voicing → numpy 向量约束过滤 → L1 距离最优化
+- SATB 固定 4 声部（bass + 3 upper），不再有 voice count 漂移
+- 平行检查覆盖 full chord（bass + upper），不只是 upper-upper
+- 交叉验证通过：numpy 引擎和 music21 VoiceLeadingQuartet 结果一致
+- Stats: avg 8.1 semitones/transition, total 268 over 33 transitions
 
 ### 音频
 
@@ -54,17 +54,20 @@ Spacing drift: 后半段（mm.21-34）上声部之间距离逐渐变大（最大
 3. **规则引擎 catch 了 LLM 的问题**：voice leading validator 成功检测出平行五度/八度，证明"LLM 提议 → 规则引擎把关"这个架构是有效的。
 4. **Pipeline 端到端跑通**：从 Roman numeral → MIDI → WAV 整个链条没有断。
 
-### 什么不 WORK ✗
-1. **Voicing 是短板**：LLM 能选对和弦，但不能保证 voicing 不产生平行运动。自动 voicing 需要更智能的算法。
-2. **Spacing drift**：smooth voice leading 在 diminished 和弦处理上不稳定，声部间距会越来越大。
+### 什么不 WORK ✗（v1 问题，v2 已解决）
+1. ~~**Voicing 是短板**~~：→ v2 向量引擎通过穷举搜索 + 约束过滤解决
+2. ~~**Spacing drift**~~：→ v2 固定 SATB 4 声部 + spacing 约束
 3. **音频预览太粗糙**：sine-based 合成器只能听和声，无法判断"味道"。需要 FluidSynth 或直接用 GarageBand。
 4. **BWV 846 pattern 本身还可以更精确**：目前的 arpeggiation 是简化版，真实的 BWV 846 有 5 voice pattern。
 
-### Key Insight
-**LLM 在"选什么和弦"这个层面表现不错，但在"怎么排列声部"这个层面需要外部引擎。** 这完美验证了项目假设：LLM 有音乐知识但缺乏多步推理（voice leading 就是典型的多步推理问题）。
+### Key Insights
+1. **LLM 在"选什么和弦"这个层面表现不错，但在"怎么排列声部"这个层面需要外部引擎。** 这完美验证了项目假设。
+2. **Voice leading 是一个向量优化问题**：chord = Z^n 中的点，voice leading = 位移向量 d = v2 - v1，good voice leading = min ||d|| subject to constraints（Tymoczko's Geometry of Music）。
+3. **穷举搜索 + 硬约束过滤在这个规模下完全可行**：34 bar progression，每个和弦几十到几百个候选 voicing，毫秒级完成。
 
 ### 下一步
-1. 改进 voicing 算法——可能需要一个 constraint-based solver（Diatony 风格）
-2. 装 FluidSynth 或让 Wayne 用 GarageBand 听 MIDI
-3. 尝试让 Claude 直接指定每个声部的具体音高（而不是只给 Roman numeral + bass）
+1. ~~改进 voicing 算法~~ → ✓ DONE (core/voicing.py)
+2. Wayne 用 GarageBand 听 output.mid，反馈"听感"
+3. Tonnetz 可视化：把和声进行画在 Tonnetz 上，看 geometric 路径
 4. 对比 BWV 846 原曲的 voicing 和我们生成的 voicing
+5. 尝试更复杂的和声语言（更多 chromaticism、modal mixture）

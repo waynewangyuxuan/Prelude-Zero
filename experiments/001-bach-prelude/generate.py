@@ -24,10 +24,9 @@ Claude designed this progression drawing on Baroque harmonic conventions:
 import sys
 sys.path.insert(0, '../..')
 
-from core.chords import chord_pitches_with_bass
+from core.voicing import voice_lead_progression, validate_voice_led_progression
 from core.patterns import arpeggiate_bwv846
 from core.midi_export import progression_to_midi, save_midi
-from core.voice_leading import validate_progression
 from core.humanize import apply_velocity_curve, apply_timing_jitter, apply_agogic
 from core.audio import prettymidi_to_wav
 
@@ -91,41 +90,39 @@ PROGRESSION = [
 
 
 def build_measures():
-    """Convert the progression into measure dicts for the MIDI exporter.
-    Uses smooth voice leading: each chord's upper voices stay close to
-    the previous chord's upper voices."""
+    """Convert the progression using the vector-based voicing engine.
+    Exhaustive search over all valid voicings, guaranteed no parallel 5ths/8ves."""
+    voiced = voice_lead_progression(
+        PROGRESSION,
+        key_str="C",
+        bass_octave=3,
+        n_upper=3,  # SATB: bass + 3 upper voices
+    )
+    # Convert to the format expected by midi_export
     measures = []
-    prev_upper = None
-    for roman_str, bass_note in PROGRESSION:
-        ch = chord_pitches_with_bass(
-            roman_str, "C",
-            bass_note=bass_note,
-            octave_bass=3,
-            octave_upper=4,
-            prev_upper=prev_upper,
-        )
-        measures.append(ch)
-        prev_upper = ch["upper"]
-    return measures
+    for v in voiced:
+        measures.append({
+            "roman": v["roman"],
+            "bass": v["bass"],
+            "upper": v["upper"],
+        })
+    return measures, voiced
 
 
 def main():
     print("=" * 60)
     print("Experiment 001: New C Major Prelude (Bach-style)")
+    print("  >> Using vector-based voicing engine (v2)")
     print("=" * 60)
 
-    # 1. Build chord progression
-    print("\n1. Building chord progression...")
-    measures = build_measures()
-    print(f"   {len(measures)} measures")
+    # 1. Build chord progression with optimal voice leading
+    print("\n1. Building chord progression (vector-based voicing)...")
+    measures, voiced = build_measures()
+    print(f"   {len(measures)} measures, SATB (4 voices)")
 
     # 2. Voice leading validation
     print("\n2. Validating voice leading...")
-    chords_for_validation = []
-    for m in measures:
-        full_chord = sorted([m["bass"]] + m["upper"])
-        chords_for_validation.append(full_chord)
-    result = validate_progression(chords_for_validation, verbose=True)
+    result = validate_voice_led_progression(voiced, verbose=True)
 
     # 3. Generate MIDI
     print("\n3. Generating MIDI...")

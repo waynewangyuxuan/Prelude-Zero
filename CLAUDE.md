@@ -27,9 +27,15 @@ Wayne — 独立开发者/音乐爱好者，在做一个 LLM 驱动的音乐生�
 
 ### Experiment 001 发现 (2026-02-10)
 - **Claude 选和弦的能力 OK**：Roman numeral 层面的巴洛克和声进行合理
-- **Voicing 是短板**：自动 voicing 会产生平行五度/八度，需要 constraint-based solver
+- ~~**Voicing 是短板**~~ → **已解决**：`core/voicing.py` 向量引擎，穷举搜索 + 约束过滤，0 errors
 - **关键分层**："选什么和弦"（LLM 擅长）vs "怎么排列声部"（需要规则引擎）
 - Pipeline 端到端跑通：Roman numeral → music21 → pretty_midi → MIDI → WAV
+
+### Voicing Engine (core/voicing.py) — 2026-02-10
+- **核心思想**：Tymoczko's Geometry of Music — chord = Z^n 中的点, voice leading = displacement vector
+- **算法**：enumerate all voicings → hard constraints (spacing, above bass) → filter parallels (full chord) → min L1 distance
+- **结果**：34 bars, 33 transitions, 0 parallel errors. music21 交叉验证一致
+- **架构**：SATB 固定 4 声部, 和弦不够用 doubling 补
 
 ## Open Questions
 - ~~ABC vs musicpy vs pretty_midi 哪个做 LLM 输出格式最好？~~ → 决定用 Python 代码直接生成（music21 + pretty_midi）
@@ -38,7 +44,7 @@ Wayne — 独立开发者/音乐爱好者，在做一个 LLM 驱动的音乐生�
 - 华语 ballad 怎么 prompt 出好的 Royal Road 进行？
 - Synthesizer V vs ACE Studio？
 - GarageBand 够用还是需要 Logic？
-- **NEW**: Voicing 算法怎么改进？constraint solver vs 手动指定？→ 方向：向量化 + 带约束的最优化搜索
+- ~~Voicing 算法怎么改进？~~ → ✓ 已解决：core/voicing.py（穷举搜索 + numpy 向量约束）
 - **NEW**: BWV 846 pattern 细节——5 voice 还是简化版？
 - **NEW**: Geometry of Music 路线——Tonnetz 可视化 + 风格签名 + 交互式作曲（详见 notes/geometry-of-harmony.md）
 
