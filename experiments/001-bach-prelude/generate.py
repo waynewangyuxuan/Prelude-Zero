@@ -27,7 +27,7 @@ sys.path.insert(0, '../..')
 from core.voicing import voice_lead_progression, validate_voice_led_progression
 from core.patterns import arpeggiate_bwv846
 from core.midi_export import progression_to_midi, save_midi
-from core.humanize import apply_velocity_curve, apply_timing_jitter, apply_agogic
+from core.humanize import humanize, compare, HumanizeConfig
 from core.audio import prettymidi_to_wav
 
 # ══════════════════════════════════════════════════════════════
@@ -133,22 +133,56 @@ def main():
         program=0,  # Acoustic Grand Piano
     )
 
-    # 4. Apply humanization
-    print("\n4. Applying humanization...")
-    for inst in pm.instruments:
-        apply_velocity_curve(inst, "phrase_arc")
-        apply_timing_jitter(inst, sigma=0.006)
-        apply_agogic(inst, "baroque")
+    # 4. Save raw version
+    print("\n4. Saving raw MIDI...")
+    save_midi(pm, "output_raw.mid")
+    prettymidi_to_wav(pm, "output_raw.wav")
+    print(f"   Raw: output_raw.mid / output_raw.wav")
 
-    # 5. Save outputs
-    print("\n5. Saving outputs...")
-    midi_path = "output.mid"
-    wav_path = "output.wav"
-    save_midi(pm, midi_path)
-    prettymidi_to_wav(pm, wav_path)
+    # 5. Humanize
+    print("\n5. Humanizing...")
+    # Prelude sections (4 beats per bar):
+    # A: Statement (1-4), B: Expansion (5-10), C: Tonicize V (11-14)
+    # D: Return (15-20), E: Build tension (21-25), F: Dom pedal (26-30)
+    # G: Resolution (31-34)
+    section_beats = [0, 16, 40, 56, 80, 100, 120, 136]
+
+    prelude_config = HumanizeConfig(
+        bpm=66,
+        # Prelude is arpeggiated — subtler beat weights
+        beat_weights={0.0: 6, 1.0: -2, 2.0: 3, 3.0: -2},
+        velocity_jitter=4.0,
+        phrase_arc_strength=0.06,
+        # Gentle timing — arpeggio patterns need precision
+        timing_sigma=0.006,
+        voice_timing_bias={0: 0.0},     # single instrument, no voice bias
+        cadence_rubato=0.05,
+        cadence_window=2.0,
+        # Prelude: slightly more legato than fugue (flowing arpeggios)
+        default_legato=0.90,
+        stepwise_legato=0.95,
+        phrase_end_legato=0.97,
+    )
+
+    pm_human = humanize(pm, config=prelude_config, section_beats=section_beats)
+
+    save_midi(pm_human, "output.mid")
+    prettymidi_to_wav(pm_human, "output.wav")
+    print(f"   Humanized: output.mid / output.wav")
+
+    # A/B stats
+    stats = compare(pm, pm_human)
+    for voice_name, s in stats.items():
+        v = s["velocity"]
+        t = s["timing_ms"]
+        d = s["duration_ratio"]
+        print(f"   {voice_name:10s}  vel {v['mean_shift']:+.1f}±{v['std']:.1f}  "
+              f"timing {t['mean_shift']:+.1f}±{t['std']:.1f}ms  "
+              f"dur ×{d['mean']:.3f}")
 
     print("\n" + "=" * 60)
-    print("Done! Listen to output.wav or import output.mid into GarageBand.")
+    print("Done! A/B test: output_raw.wav vs output.wav")
+    print("Or import output.mid into GarageBand for better sound.")
     print("=" * 60)
 
 

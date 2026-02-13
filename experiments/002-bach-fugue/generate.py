@@ -36,6 +36,7 @@ from core.fugue import (
     evaluate_subject, evaluate_exposition,
 )
 from core.counterpoint import Note, validate_two_voices
+from core.humanize import humanize, compare, BAROQUE, ProminenceWindow, HumanizeConfig
 import pretty_midi
 import numpy as np
 from scipy.io import wavfile
@@ -584,20 +585,69 @@ def main():
     print("\n3. Counterpoint validation...")
     report = evaluate_exposition(score, verbose=True)
 
-    # 4. Export
-    print("\n4. Generating MIDI & WAV...")
-    pm = score_to_prettymidi(score)
-    pm.write("output.mid")
-    duration_sec = pm.get_end_time()
-    print(f"   MIDI: output.mid ({duration_sec:.1f}s)")
+    # 4. Export raw MIDI
+    print("\n4. Generating raw MIDI...")
+    pm_raw = score_to_prettymidi(score)
+    pm_raw.write("output_raw.mid")
+    duration_sec = pm_raw.get_end_time()
+    print(f"   Raw MIDI:  output_raw.mid ({duration_sec:.1f}s)")
 
-    audio = pm.synthesize(fs=44100)
+    # 5. Humanize
+    print("\n5. Humanizing...")
+    S_DUR = subject.duration_beats  # 9.0
+
+    section_beats = [0, 36, 44, 53, 61, 70, 78, 96, 104]
+
+    # Subject prominence: boost the voice playing the subject in each section
+    # Voice order: 0=Soprano, 1=Alto, 2=Tenor, 3=Bass
+    prominence = [
+        # Exposition entries
+        ProminenceWindow(1, 0, S_DUR),                     # Alto: subject
+        ProminenceWindow(0, S_DUR, S_DUR * 2),             # Soprano: answer
+        ProminenceWindow(2, S_DUR * 2, S_DUR * 3),         # Tenor: subject
+        ProminenceWindow(3, S_DUR * 3, S_DUR * 4),         # Bass: answer
+        # Middle entries
+        ProminenceWindow(0, 44, 53),                        # Soprano: subject in Am
+        ProminenceWindow(2, 61, 70),                        # Tenor: subject in F
+        # Stretto
+        ProminenceWindow(1, 78, 78 + S_DUR),               # Alto: stretto entry 1
+        ProminenceWindow(0, 78 + 4.5, 78 + 4.5 + S_DUR),  # Soprano: stretto entry 2
+        ProminenceWindow(2, 78 + 9, 78 + 9 + S_DUR),      # Tenor: stretto entry 3
+    ]
+
+    config = HumanizeConfig(bpm=80)
+    pm_human = humanize(pm_raw, config=config,
+                        section_beats=section_beats,
+                        prominence=prominence)
+
+    pm_human.write("output.mid")
+    print(f"   Humanized: output.mid ({pm_human.get_end_time():.1f}s)")
+
+    # A/B comparison stats
+    stats = compare(pm_raw, pm_human)
+    print("\n   A/B comparison (raw → humanized):")
+    for voice_name, s in stats.items():
+        v = s["velocity"]
+        t = s["timing_ms"]
+        d = s["duration_ratio"]
+        print(f"   {voice_name:10s}  vel {v['mean_shift']:+.1f}±{v['std']:.1f}  "
+              f"timing {t['mean_shift']:+.1f}±{t['std']:.1f}ms  "
+              f"dur ×{d['mean']:.3f}")
+
+    # WAV from humanized
+    audio = pm_human.synthesize(fs=44100)
     audio = audio / (np.max(np.abs(audio)) + 1e-8)
     wavfile.write("output.wav", 44100, (audio * 32767).astype(np.int16))
-    print(f"   WAV:  output.wav ({duration_sec:.1f}s)")
+    print(f"\n   WAV: output.wav ({pm_human.get_end_time():.1f}s)")
 
-    # 5. Structure summary
-    print("\n5. Structure:")
+    # Also export raw WAV for comparison
+    audio_raw = pm_raw.synthesize(fs=44100)
+    audio_raw = audio_raw / (np.max(np.abs(audio_raw)) + 1e-8)
+    wavfile.write("output_raw.wav", 44100, (audio_raw * 32767).astype(np.int16))
+    print(f"   WAV: output_raw.wav (raw, for A/B comparison)")
+
+    # 6. Structure summary
+    print("\n6. Structure:")
     sections = [
         ("Exposition",    0, 36),
         ("Episode 1",     36, 44),
@@ -613,7 +663,8 @@ def main():
         print(f"   {name:20s} bars {start/4+1:.0f}-{end/4:.0f} ({dur_bars:.0f} bars)")
 
     print("\n" + "=" * 60)
-    print("Done! Import output.mid into GarageBand for better sound.")
+    print("Done! A/B test: output_raw.wav vs output.wav")
+    print("Or import output.mid into GarageBand for better sound.")
     print("=" * 60)
 
 

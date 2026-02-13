@@ -60,7 +60,7 @@ Wayne — 独立开发者/音乐爱好者，在做一个 LLM 驱动的音乐生�
 ## Open Questions
 - ~~ABC vs musicpy vs pretty_midi 哪个做 LLM 输出格式最好？~~ → 决定用 Python 代码直接生成（music21 + pretty_midi）
 - Claude vs GPT-4o 在音乐生成上的优劣？
-- Humanize 参数怎么调才像真人？
+- ~~Humanize 参数怎么调才像真人？~~ → ✓ 已解决：core/humanize.py 三层引擎，BAROQUE preset
 - 华语 ballad 怎么 prompt 出好的 Royal Road 进行？
 - Synthesizer V vs ACE Studio？
 - GarageBand 够用还是需要 Logic？
@@ -68,8 +68,17 @@ Wayne — 独立开发者/音乐爱好者，在做一个 LLM 驱动的音乐生�
 - ~~Countersubject 设计~~ → ✓ 已完成：反向运动 + 节奏互补，0 errors
 - ~~Episode generation~~ → ✓ 已完成：subject 片段 sequential motifs，3 episodes
 - ~~Stretto~~ → ✓ 已完成：50% overlap + G pedal bass
-- **NEW**: Humanize — velocity 曲线 + timing 微偏移，让赋格不机械
+- ~~Humanize~~ → ✓ 已完成：core/humanize.py 三层引擎 (velocity/timing/articulation)
 - **NEW**: Pink Floyd 方向 — 巴赫 pipeline 已验证，开始探索 atmosphere/texture
+
+### Humanize Engine (core/humanize.py) — 2026-02-11
+- **三层架构**: velocity shaping + timing micro-offsets + articulation
+- **Velocity**: beat weights (1强3次2/4弱) + phrase arc (bell curve per section) + subject prominence + jitter
+- **Timing**: Gaussian σ=8ms + voice bias (bass early -5ms, soprano late +3ms) + cadence rubato
+- **Articulation**: non-legato 85% (baroque) / 90% (prelude arpeggios) + stepwise legato + phrase-end linger
+- **Presets**: BAROQUE (detached, moderate) / ROMANTIC (legato, wider dynamics)
+- **ProminenceWindow**: 标记 subject entry 时间段，该声部 +10 velocity
+- **A/B 验证**: 赋格 velocity range 5→39, timing σ≈10ms, dur ×0.92; 前奏曲 velocity range 15→27
 
 ## Terms
 | Term | Meaning |
