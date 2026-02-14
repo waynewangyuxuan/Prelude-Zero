@@ -479,31 +479,141 @@ def build_full_fugue():
 
     t += ep3_dur  # t = 78.0
 
-    # ── STRETTO (bars 19-22) — compressed entries ──
-    stretto_delay = 4.5  # overlap: entry every 4.5 beats (subject = 9 beats)
+    # ── STRETTO (bars 19-24) — v3: FREE COUNTERPOINT ──
+    # v2 finding: all-subject stretto = combined 0.182, entropy H=2.783
+    #   → too safe: subject is diatonic/stepwise, transposition preserves consonance
+    # v3 strategy:
+    #   - Keep alto+soprano SUBJECT entries as structural backbone
+    #   - Replace tenor with FREE ascending chromatic + diminution
+    #   - Replace bass with CHROMATIC pedal + ascending chromatic line
+    #   - Add FREE TAILS to alto (87-96) and soprano (90-96)
+    #   - Target: tension peak ~0.50+, entropy H→3.0+ (adventurous sweet spot)
+    #
+    # Structure (t=78):
+    #   78──────────81──────────84──────────87──────────90──────────93──────96
+    #   Sop: ·····  |== SUBJECT +7 (G major) ==|→ free ascending tail →|hold|
+    #   Alto:|====== SUBJECT at pitch (C) ======|→ free chromatic arch ─────|
+    #   Ten: ·····  ····  |── free ascending chromatic + diminution ────────|
+    #   Bass:|── chromatic pedal G/Ab/F# ──────|── ascending chromatic ─────|
 
-    # Alto enters first with subject
+    stretto_delay = 3.0
+
+    # ── Layer 1: Subject entries (structural backbone) ──
+
+    # Alto: subject at pitch (C major) — beats 78-87
     stretto_alto = transpose(subject, 0, new_onset=t)
     stretto_alto = _fit_to_range(stretto_alto, voices[1])
     voices[1].add_notes(stretto_alto.notes)
 
-    # Soprano enters 4.5 beats later with subject (up a 4th)
-    stretto_sop = transpose(subject, 5, new_onset=t + stretto_delay)
+    # Soprano: subject +7 (G major) — beats 81-90
+    # G4 B4 A4 D5 | C5 B4 A4 G4 F#4 G4
+    stretto_sop = transpose(subject, 7, new_onset=t + stretto_delay)
     stretto_sop = _fit_to_range(stretto_sop, voices[0])
+    stretto_sop.notes[1].midi += 1  # B4→C5: break parallel 5th with alto
     voices[0].add_notes(stretto_sop.notes)
 
-    # Tenor enters 4.5 beats after soprano with subject (down an octave)
-    stretto_tenor = transpose(subject, -12, new_onset=t + stretto_delay * 2)
-    stretto_tenor = _fit_to_range(stretto_tenor, voices[2])
-    voices[2].add_notes(stretto_tenor.notes)
+    # ── Layer 2: Free counterpoint (chromatic + diminution) ──
 
-    # Bass: dominant pedal under the stretto
-    stretto_total = stretto_delay * 2 + S_DUR
-    voices[3].add_notes([
-        Note(midi=43, onset=t, duration=stretto_total),   # G2 pedal
+    # TENOR: ascending chromatic with 8th/16th notes (beats 84-96)
+    # Contrary motion to soprano's descent. Heavy chromatic content.
+    # Chromatic PCs used: F#(6), Ab(8), Bb(10), C#(1), Eb(3)
+    voices[2].add_notes([
+        # Phase 1: ascending chromatic scale (beat 84-87)
+        Note(midi=52, onset=t+6.0, duration=0.5),    # E3
+        Note(midi=53, onset=t+6.5, duration=0.5),    # F3
+        Note(midi=54, onset=t+7.0, duration=0.5),    # F#3 — chromatic!
+        Note(midi=55, onset=t+7.5, duration=0.5),    # G3
+        Note(midi=56, onset=t+8.0, duration=0.5),    # Ab3 — chromatic!
+        Note(midi=57, onset=t+8.5, duration=0.5),    # A3
+        # Phase 2: continue + diminution burst (beat 87-90)
+        Note(midi=58, onset=t+9.0, duration=0.5),    # Bb3 — chromatic!
+        Note(midi=58, onset=t+9.5, duration=0.5),    # Bb3 — hold (breaks P5 w/ soprano)
+        Note(midi=60, onset=t+10.0, duration=0.25),   # C4 — 16th note!
+        Note(midi=61, onset=t+10.25, duration=0.25),  # C#4 — chromatic!
+        Note(midi=62, onset=t+10.5, duration=0.25),   # D4
+        Note(midi=63, onset=t+10.75, duration=0.25),  # Eb4 — chromatic!
+        Note(midi=64, onset=t+11.0, duration=0.5),    # E4
+        Note(midi=65, onset=t+11.5, duration=0.5),    # F4 — peak of ascent
+        # Phase 3: descent (beat 90-93)
+        Note(midi=64, onset=t+12.0, duration=0.25),   # E4 — 16th!
+        Note(midi=63, onset=t+12.25, duration=0.25),  # Eb4 — chromatic!
+        Note(midi=62, onset=t+12.5, duration=0.5),    # D4
+        Note(midi=61, onset=t+13.0, duration=0.25),   # C#4 — chromatic!
+        Note(midi=60, onset=t+13.25, duration=0.25),  # C4
+        Note(midi=59, onset=t+13.5, duration=0.5),    # B3
+        Note(midi=58, onset=t+14.0, duration=0.5),    # Bb3 — chromatic!
+        Note(midi=57, onset=t+14.5, duration=0.5),    # A3
+        # Phase 4: cadence preparation (beat 93-96)
+        Note(midi=56, onset=t+15.0, duration=0.5),    # Ab3 — chromatic!
+        Note(midi=55, onset=t+15.5, duration=0.5),    # G3 — dominant
+        Note(midi=54, onset=t+16.0, duration=0.5),    # F#3 — chromatic!
+        Note(midi=55, onset=t+16.5, duration=0.5),    # G3
+        Note(midi=55, onset=t+17.0, duration=1.0),    # G3 — hold for cadence
     ])
 
-    t += stretto_total  # t = 78 + 4.5*2 + 9 = 96.0
+    # BASS: chromatic pedal → ascending chromatic approach (beats 78-96)
+    voices[3].add_notes([
+        # Phase 1: chromatic pedal on G with neighbors (beat 78-87)
+        Note(midi=43, onset=t, duration=3.0),          # G2 — solid pedal
+        Note(midi=44, onset=t+3.0, duration=1.0),      # Ab2 — chromatic!
+        Note(midi=43, onset=t+4.0, duration=2.0),      # G2 — return
+        Note(midi=42, onset=t+6.0, duration=1.0),      # F#2 — chromatic!
+        Note(midi=43, onset=t+7.0, duration=2.0),      # G2 — return
+        # Phase 2: descend to nadir, then STAGGERED chromatic ascent (beat 87-96)
+        # Stagger: hold G2 longer (89.5-91.0) so bass ascent doesn't
+        # parallel soprano/alto chromatic tails starting at beat 90
+        Note(midi=41, onset=t+9.0, duration=1.0),      # F2 — step down
+        Note(midi=40, onset=t+10.0, duration=0.5),     # E2 — nadir (lowest!)
+        Note(midi=41, onset=t+10.5, duration=0.5),     # F2
+        Note(midi=42, onset=t+11.0, duration=0.5),     # F#2 — chromatic!
+        Note(midi=43, onset=t+11.5, duration=1.5),     # G2 — HOLD (avoids ∥8ve w/ sop)
+        Note(midi=44, onset=t+13.0, duration=0.5),     # Ab2 — chromatic! (staggered)
+        Note(midi=45, onset=t+13.5, duration=0.5),     # A2
+        Note(midi=46, onset=t+14.0, duration=1.0),     # Bb2 — chromatic!
+        Note(midi=47, onset=t+15.0, duration=0.5),     # B2 — leading tone
+        Note(midi=48, onset=t+15.5, duration=0.5),     # C3 — tonic touch
+        Note(midi=43, onset=t+16.0, duration=2.0),     # G2 — dominant pedal
+    ])
+
+    # ── Layer 3: Free tails (continue after subject entries end) ──
+
+    # ALTO free tail: descending chromatic arch (beats 87-96)
+    # Subject ended on C4. Descend chromatically to F#3, turn around,
+    # ascend chromatically to D4 (matching cadence start pitch).
+    voices[1].add_notes([
+        Note(midi=60, onset=t+9.0, duration=0.5),     # C4 — hold (oblique vs sop F#4, tritone!)
+        Note(midi=58, onset=t+9.5, duration=0.5),     # Bb3 — chromatic!
+        Note(midi=57, onset=t+10.0, duration=0.5),    # A3
+        Note(midi=56, onset=t+10.5, duration=0.5),    # Ab3 — chromatic!
+        Note(midi=55, onset=t+11.0, duration=0.5),    # G3
+        Note(midi=54, onset=t+11.5, duration=0.5),    # F#3 — chromatic! (nadir)
+        Note(midi=55, onset=t+12.0, duration=0.5),    # G3 — turn around
+        Note(midi=56, onset=t+12.5, duration=0.5),    # Ab3 — chromatic!
+        Note(midi=57, onset=t+13.0, duration=0.5),    # A3
+        Note(midi=58, onset=t+13.5, duration=0.5),    # Bb3 — chromatic!
+        Note(midi=59, onset=t+14.0, duration=0.5),    # B3
+        Note(midi=60, onset=t+14.5, duration=0.5),    # C4
+        Note(midi=60, onset=t+15.0, duration=0.5),    # C4 — hold (oblique vs sop C#5)
+        Note(midi=62, onset=t+15.5, duration=0.5),    # D4 — leap up
+        Note(midi=62, onset=t+16.0, duration=2.0),    # D4 — hold → cadence
+    ])
+
+    # SOPRANO free tail: ascending chromatic to cadence (beats 90-96)
+    # Subject ended on G4. Ascend chromatically through Ab, Bb, B, C,
+    # arriving at D5 (cadence start pitch).
+    voices[0].add_notes([
+        Note(midi=68, onset=t+12.0, duration=0.5),    # Ab4 — chromatic!
+        Note(midi=69, onset=t+12.5, duration=0.5),    # A4
+        Note(midi=70, onset=t+13.0, duration=0.5),    # Bb4 — chromatic!
+        Note(midi=71, onset=t+13.5, duration=0.5),    # B4 — leading tone
+        Note(midi=72, onset=t+14.0, duration=1.0),    # C5 — tonic arrival
+        Note(midi=73, onset=t+15.0, duration=0.5),    # C#5 — chromatic!
+        Note(midi=74, onset=t+15.5, duration=0.5),    # D5
+        Note(midi=74, onset=t+16.0, duration=2.0),    # D5 — hold → cadence
+    ])
+
+    stretto_total = 18.0  # beats 78-96
+    t += stretto_total  # t = 96.0
 
     # ── FINAL CADENCE (bars 23-24) ──
     cadence_notes = build_final_cadence(t, voices)
@@ -609,10 +719,11 @@ def main():
         # Middle entries
         ProminenceWindow(0, 44, 53),                        # Soprano: subject in Am
         ProminenceWindow(2, 61, 70),                        # Tenor: subject in F
-        # Stretto
+        # Stretto (v2: 4 entries at 3.0 beat delay)
         ProminenceWindow(1, 78, 78 + S_DUR),               # Alto: stretto entry 1
-        ProminenceWindow(0, 78 + 4.5, 78 + 4.5 + S_DUR),  # Soprano: stretto entry 2
-        ProminenceWindow(2, 78 + 9, 78 + 9 + S_DUR),      # Tenor: stretto entry 3
+        ProminenceWindow(0, 78 + 3.0, 78 + 3.0 + S_DUR),  # Soprano: stretto entry 2
+        ProminenceWindow(2, 78 + 6.0, 78 + 6.0 + S_DUR),  # Tenor: stretto entry 3
+        ProminenceWindow(3, 78 + 9.0, 78 + 9.0 + S_DUR),  # Bass: stretto entry 4
     ]
 
     config = HumanizeConfig(bpm=80)
