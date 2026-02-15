@@ -7,17 +7,19 @@ Wayne — 独立开发者/音乐爱好者，在做一个 LLM 驱动的音乐生�
 **定位：** 用通用 LLM（Claude/GPT）作为音乐制作的大脑，通过 prompt engineering 而非模型训练，生成可控、有味道的音乐。
 **核心理念：** LLM 提议 → 规则引擎把关 → 工具链渲染。
 **阶段：** Phase 1 — 方法论探索（搞清楚什么 work、什么不 work）
-**特色：** 关注华语流行（C-pop），Royal Road 进行，POP909 数据集，五声音阶体系。
-**当前方向：** 巴赫 → Pink Floyd → 融合 → 回到华语流行。先用 BWV 846 (Well-Tempered Clavier) 验证 pipeline。
+**特色：** 探索古典 × 前卫摇滚的融合空间。不是 C-pop，是 Bach × Chopin × Pink Floyd。
+**当前方向：** 三种风格各自理解 → metric space 中找到融合区域 → 生成。Pipeline 用 BWV 846 验证。
 
-## Architecture (5 layers)
-| 层 | 工具 | 用途 |
+## Architecture (3 layers + LLM operator)
+详见 `ARCHITECTURE.md`。核心：
+| 层 | 职责 | 实现 |
 |---|---|---|
-| LLM 层 | Claude / GPT | 曲式、和弦（Roman numeral）、旋律、风格、歌词 |
-| 理论验证层 | music21 / tonal.js / musicpy | 和声检查、voice leading、格式转换 |
-| 经验知识层 | Hooktheory API / POP909 / ChoCo | 和弦转移概率、华语流行 patterns |
-| Humanize 层 | Swing / Velocity / Groove 模板 | 让音乐有"味道" |
-| 渲染层 | Synthesizer V / ACE-Step / GarageBand | MIDI → 最终音频 |
+| Compiler | 数学 → 音符，纯确定性 | core/chords.py, patterns.py, midi_export.py, audio.py |
+| Constraint Space | 规则即数学，LLM 在其中操作 | core/voice_leading.py, counterpoint.py, voicing.py |
+| Metric Space | 量化"是什么"而非"好不好" | core/melody.py, tension.py, entropy.py |
+| LLM (operator) | 翻译意图→指标范围，选择路径 | Claude prompt → metric targets |
+
+**关键原则**: 指标是范围不是点, style 是 metric space 的子区域, 同样的范围不同路径 = 创造力
 
 ## Key Insights
 - LLM 有音乐知识但缺乏多步推理能力（MusicTheoryBench ~25%）→ 外部规则引擎是必须的
@@ -43,19 +45,24 @@ Wayne — 独立开发者/音乐爱好者，在做一个 LLM 驱动的音乐生�
 - **已知天花板**：sorted-position voice tracking 无法保证每个声部的 tendency 都在同一声部解决（需要 voice identity tracking）
 - **架构**：SATB 固定 4 声部, 和弦不够用 doubling 补
 
-### Experiment 002 发现 (2026-02-11)
-- **完整赋格 0 errors**：295 notes, 26 bars, 78s, 8 sections, **0 counterpoint errors**, 83 warnings
+### Experiment 002 发现 (2026-02-11, updated 02-13)
+- **完整赋格 0 errors**：**350 notes** (v3), 26 bars, 78s, 8 sections, **0 counterpoint errors**, 97 warnings
 - **Subject + Countersubject 配合 OK**：反向运动 + 节奏互补，0 errors
 - **赋格 = 代数结构 + 手工打磨**：Subject transformations 可靠，但 free counterpoint 需迭代修复
 - **Tonal answer 两区域设计 work**：head zone swap + tail zone real transposition，F#4 leading tone 保留
-- **Stretto 50% overlap work**：entry_delay=4.5 on 9-beat subject，G pedal bass 避免 errors
+- **Stretto v3 (free counterpoint)**：
+  - Layer 1: 2 subject entries as structural backbone (Alto: C maj, Soprano: +7 G maj)
+  - Layer 2: 2 FREE voices replacing subject entries (Tenor: ascending chromatic w/ diminution 27 notes, Bass: chromatic pedal G/Ab/F# + staggered ascending chromatic 16 notes)
+  - Layer 3: FREE tails after subject entries end (Alto: chromatic arch 15 notes, Soprano: ascending chromatic 8 notes)
+  - 8 parallel errors → fixed with oblique motion, pitch holds, staggered timing → 0 errors
+  - **结果 vs v2**: combined +32% (0.182→0.240), density +88%, registral +55%, pitch H 2.783→3.113 bits
 - **Validate→fix→validate 循环有效**：从 9 errors 迭代到 0，oblique/contrary motion 是万能修复术
 - **调性走向 C→G→Am→F→C**：Exposition→Episodes→Middle Entries 的调性规划合理
 
 ### Fugue Engine (core/fugue.py + core/counterpoint.py) — 2026-02-11
 - **core/fugue.py**: Subject 定义 + 5 种变换 + tonal/real answer + exposition assembly + quality evaluation
 - **core/counterpoint.py**: parallel 5ths/8ves, direct 5ths/8ves, consonance on strong beats, voice crossing, melodic intervals, gap-fill
-- **完整赋格结果**: 4 voices, 295 notes, 0 errors, 83 warnings
+- **完整赋格结果**: 4 voices, **350 notes** (v3), 0 errors, 97 warnings
 
 ## Open Questions
 - ~~ABC vs musicpy vs pretty_midi 哪个做 LLM 输出格式最好？~~ → 决定用 Python 代码直接生成（music21 + pretty_midi）
@@ -67,9 +74,83 @@ Wayne — 独立开发者/音乐爱好者，在做一个 LLM 驱动的音乐生�
 - ~~Voicing 算法怎么改进？~~ → ✓ 已解决：core/voicing.py v3.1
 - ~~Countersubject 设计~~ → ✓ 已完成：反向运动 + 节奏互补，0 errors
 - ~~Episode generation~~ → ✓ 已完成：subject 片段 sequential motifs，3 episodes
-- ~~Stretto~~ → ✓ 已完成：50% overlap + G pedal bass
+- ~~Stretto~~ → ✓ 已完成：v3 free counterpoint (2 subject entries + 2 free voices + free tails), 0 errors, 350 notes
 - ~~Humanize~~ → ✓ 已完成：core/humanize.py 三层引擎 (velocity/timing/articulation)
-- **NEW**: Pink Floyd 方向 — 巴赫 pipeline 已验证，开始探索 atmosphere/texture
+- ~~Pink Floyd 方向~~ — 暂缓，先完成 metric dimensions 调研
+- **NEW**: Melody Metrics → 单声部指标体系已建立，benchmark 已校准
+
+## Phase 2 方向：从 "avoid errors" 到 "optimize beauty"
+
+### 三个数学方向（2026-02-12 确定）
+1. **Tension Curve（张力模型）** ← 当前方向，diagnostic 阶段完成
+   - 核心洞察：音乐 = 张力和释放。我们缺的不是规则，是方向感
+   - T(t) = w₁·harmonic + w₂·dissonance + w₃·melodic + w₄·registral + w₅·density
+   - 权重: harmonic=0.30, dissonance=0.25, melodic=0.20, registral=0.10, density=0.15
+   - Harmonic tension: DFT f₅ magnitude + phase distance from expected key
+   - Dissonance: interval-class roughness (Hindemith/Huron: m2=1.0, tritone=0.8, M2=0.3, m3=0.2, M3=0.15, P4=0.05)
+   - **Experiment 003 发现 (2026-02-12, updated 02-13)**:
+     - **核心问题：张力峰值在错误的位置**
+     - Prelude: 峰值在 beat 52 (Section C: Tonicize V) 而非 Section F (Dom pedal)
+     - Fugue: 峰值在 beat 41.5 (Episode 1) 而非 Stretto
+     - **Stretto v3 (free counterpoint) 进展**:
+       - combined: 0.182 → **0.240** (+32%), now 3rd highest section (was 2nd lowest)
+       - density: 0.215 → **0.404** (+88%) — diminution + 4-voice free writing
+       - registral: 0.299 → **0.462** (+55%) — chromatic bass line widened spread
+       - pitch entropy: 2.783 → **3.113** bits (+12%, in "adventurous" sweet spot)
+       - Distance from ideal: 0.236 → **0.209** (-10%)
+     - Prelude variance 只有 0.094 — 太平 → 缺乏对比
+     - Prelude dissonance 太低 (mean 0.091) — 太"安全"
+   - 下一步: 进一步 boost stretto (secondary dominants, augmented 6ths) 或 reduce episode tension
+
+2. **Information-Theoretic Balance** ← ✓ 已完成基线测量 (2026-02-13)
+   - 好音乐 entropy 在甜区：太低=无聊，太高=随机
+   - Shannon entropy of pitch transitions、rhythm patterns
+   - **Fugue overall pitch transition H = 1.79 bits** — below sweet spot (2.3-3.2)
+   - **Stretto v3 pitch H = 3.113 bits** — "adventurous" zone, up from 2.783 (v2)
+   - **Cross-voice MI = 0.719** — moderate voice independence
+   - Free counterpoint pushed stretto into sweet spot, validating the approach
+
+3. **Voice Leading Optimization on Orbifold**（待做）
+   - Tymoczko: n-note chord = point in T^n/S_n
+   - 从"最短距离"进化到"服务于 tension curve 的最优路径"
+   - 把 tension curve 作为 cost function 的一部分
+
+### Tension Engine (core/tension.py + core/tension_budget.py) — 2026-02-12
+- **core/tension.py**: 5维张力函数 T(t) = Σ wᵢ·Tᵢ(t)
+  - `compute_tension()`: MIDI → TensionCurve (per-beat 5维张力)
+  - `target_curve()`: 理想曲线生成 (prelude/fugue/arch/custom)
+  - `summarize()`: 人类可读报告
+- **core/tension_budget.py**: 创作引擎集成
+  - `TensionBudget`: 每 section → target per dimension
+  - `tension_voicing_scorer()`: extra_scorer for voicing engine (偏好匹配 dissonance/registral 目标的 voicing)
+  - `suggest_chords()`: 根据 harmonic tension 目标推荐和弦类型
+  - `density_guidance()` / `melodic_guidance()`: 节奏密度和旋律跳进建议
+  - `fugue_budget()` / `prelude_budget()`: 预设目标 (Stretto peak = 0.65, Dom pedal peak = 0.70)
+- **核心发现**: 张力峰值在错误的位置 — 诊断有效，但修复需要 compositional changes (free counterpoint, chromatic passing tones, diminution)
+
+### Entropy Engine (core/entropy.py) — 2026-02-13
+- **核心思想**: Shannon entropy 量化音乐的 predictability vs surprise
+- **测量维度**: pitch transition H, rhythm IOI H, interval-class H, cross-voice MI
+- **windowed entropy**: per-beat entropy over sliding window (default 8 beats)
+- **甜区**: 2.3-3.2 bits (Bach reference), <2.3 = too predictable, >3.2 = too random
+- **关键发现**: Fugue overall H=1.79 (too predictable), but stretto v3 = 3.113 (adventurous)
+- **EntropyProfile dataclass**: per-voice metrics + global summaries + windowed time series
+- **集成**: `compute_entropy(pm, bpm)` → EntropyProfile, `summarize()` → human-readable report
+
+### Melody Metrics Engine (core/melody.py) — 2026-02-13
+- **核心思想**: 单声部旋律的 6 维度量化评估 (Easy tier)
+- **6 个指标**: pitch range/tessitura, interval distribution, pitch entropy, rhythm entropy, rhythm density, tonal clarity
+- **MelodyProfile dataclass**: 18 个字段, `genre_fit()` 检查是否在 genre 范围内
+- **K-S Key Finding**: Krumhansl-Schmuckler profiles (major + minor) → tonal clarity score
+- **三 Genre 校准**: baroque / romantic / pop, 从 15 首参考旋律 benchmark 校准
+- **Benchmark 结果 (Experiment 004)**:
+  - 15 首参考旋律 (5 baroque, 5 romantic, 5 pop), 手工编码 MIDI pitch/onset/duration
+  - 校准后 9/9 melodies pass (8 at 10/10, 1 at 9/10)
+  - **最强 genre 区分器**: rhythm_density (baroque 3.08, romantic 1.51, pop 1.28)
+  - **其次**: direction_change_ratio (baroque 0.55, romantic/pop ~0.27)
+  - **最弱**: pitch_entropy (all genres ~2.3-2.6, overlap too much)
+  - transition_entropy 已移除 (short melodies 不可靠)
+- **Architecture Layer**: Metric Space — measures WHAT melody is, not whether it's good
 
 ### Humanize Engine (core/humanize.py) — 2026-02-11
 - **三层架构**: velocity shaping + timing micro-offsets + articulation

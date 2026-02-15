@@ -1,0 +1,46 @@
+---
+title: "Tension-Driven Composition Pipeline"
+---
+flowchart TD
+    subgraph PLAN["Phase 1: Plan"]
+        TC["Target Tension Curve\ndesign overall arc first"]
+        TB["Tension Budget\nper-section targets for\neach dimension"]
+        TC --> TB
+    end
+
+    subgraph GENERATE["Phase 2: Generate (section by section)"]
+        direction TB
+        H["Harmonic Selection\n— high tension → distant chords\n— low tension → diatonic"]
+        V["Voicing Selection\n— high dissonance target → add m2/tritone\n— high registral → wider spread"]
+        D["Density & Rhythm\n— high density → 16ths, ornaments\n— low density → longer values"]
+        M["Melodic Contour\n— high melodic tension → leaps\n— low → stepwise"]
+    end
+
+    subgraph VALIDATE["Phase 3: Validate & Adjust"]
+        CP["Counterpoint Check\n(existing: 0 errors)"]
+        TM["Tension Measurement\ncompute_tension()"]
+        DIFF["Compare actual vs target\nper-dimension delta"]
+        FIX["Adjust: re-voice / swap chord\nif delta > threshold"]
+        CP --> TM --> DIFF --> FIX
+        FIX -->|"iterate"| TM
+    end
+
+    TB --> H
+    TB --> V
+    TB --> D
+    TB --> M
+    H --> CP
+    V --> CP
+    D --> CP
+    M --> CP
+
+    style TC fill:#1e3a5f,stroke:#3b82f6,color:#93c5fd
+    style TB fill:#1e3a5f,stroke:#3b82f6,color:#93c5fd
+    style H fill:#3b1f1f,stroke:#ef4444,color:#fca5a5
+    style V fill:#3b2f1f,stroke:#f59e0b,color:#fcd34d
+    style D fill:#1f2f3b,stroke:#8b5cf6,color:#c4b5fd
+    style M fill:#1f3b2f,stroke:#10b981,color:#6ee7b7
+    style CP fill:#1f2937,stroke:#6b7280,color:#d1d5db
+    style TM fill:#1f2937,stroke:#6b7280,color:#d1d5db
+    style DIFF fill:#3b1f1f,stroke:#ef4444,color:#fca5a5
+    style FIX fill:#1f3b2f,stroke:#10b981,color:#6ee7b7
