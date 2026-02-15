@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prelude Zero — Three-Style DNA Digest</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bach: #4ECDC4;
+    --chopin: #FF6B9D;
+    --floyd: #C77DFF;
+    --bg: #0a0a0f;
+    --surface: #14141f;
+    --surface2: #1e1e2e;
+    --text: #e0e0e0;
+    --text-dim: #888;
+    --border: #2a2a3a;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 24px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 60px;
+  }
+
+  header h1 {
+    font-size: 2.4em;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--bach), var(--chopin), var(--floyd));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+    letter-spacing: -0.02em;
+  }
+
+  header .subtitle {
+    font-size: 1em;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── Radar Chart ── */
+  .section { margin-bottom: 64px; }
+  .section-title {
+    font-size: 1.3em;
+    font-weight: 600;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .radar-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 40px;
+    flex-wrap: wrap;
+  }
+
+  canvas#radar { max-width: 600px; width: 100%; }
+
+  .legend {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.95em;
+  }
+
+  .legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .legend-label { font-weight: 500; }
+  .legend-desc { color: var(--text-dim); font-size: 0.85em; }
+
+  /* ── DNA Cards ── */
+  .dna-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 24px;
+  }
+
+  .dna-card {
+    background: var(--surface);
+    border-radius: 16px;
+    padding: 28px;
+    border: 1px solid var(--border);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .dna-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+  }
+
+  .dna-card h3 {
+    font-size: 1.15em;
+    font-weight: 600;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .dna-card h3 .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .dna-trait {
+    margin-bottom: 14px;
+    padding-left: 0;
+  }
+
+  .trait-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 4px;
+  }
+
+  .trait-name {
+    font-size: 0.88em;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .trait-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82em;
+    color: var(--text-dim);
+  }
+
+  .trait-bar-bg {
+    height: 6px;
+    background: var(--surface2);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .trait-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.8s ease;
+  }
+
+  .trait-effect {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75em;
+    margin-top: 2px;
+  }
+
+  .sigma-pos { color: #4ECDC4; }
+  .sigma-neg { color: #FF6B9D; }
+
+  /* ── Overlap Matrix ── */
+  .overlap-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+  }
+
+  .overlap-table th, .overlap-table td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .overlap-table th {
+    font-weight: 600;
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+  }
+
+  .overlap-table td:first-child {
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .overlap-pct {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85em;
+    font-weight: 500;
+  }
+
+  .overlap-high { background: rgba(78, 205, 196, 0.15); color: #4ECDC4; }
+  .overlap-med { background: rgba(255, 214, 10, 0.12); color: #FFD60A; }
+  .overlap-low { background: rgba(255, 107, 157, 0.12); color: #FF6B9D; }
+  .overlap-none { background: rgba(255,255,255,0.05); color: var(--text-dim); }
+
+  .range-text {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82em;
+    color: var(--text-dim);
+  }
+
+  /* ── Mode Distribution ── */
+  .mode-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+
+  .mode-card {
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid var(--border);
+  }
+
+  .mode-card h4 {
+    font-size: 0.95em;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .mode-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 0.85em;
+  }
+
+  .mode-name { width: 90px; text-align: right; color: var(--text-dim); }
+  .mode-bar-outer {
+    flex: 1;
+    height: 20px;
+    background: var(--surface2);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .mode-bar-inner {
+    height: 100%;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8em;
+    font-weight: 500;
+    color: var(--bg);
+    transition: width 0.8s ease;
+  }
+
+  /* ── Insight Box ── */
+  .insight-box {
+    background: linear-gradient(135deg, rgba(78,205,196,0.08), rgba(199,125,255,0.08));
+    border: 1px solid rgba(199,125,255,0.2);
+    border-radius: 16px;
+    padding: 32px;
+  }
+
+  .insight-box h3 {
+    font-size: 1.1em;
+    margin-bottom: 20px;
+  }
+
+  .insight-item {
+    margin-bottom: 16px;
+    padding-left: 20px;
+    position: relative;
+    font-size: 0.95em;
+    line-height: 1.7;
+  }
+
+  .insight-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 10px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--floyd);
+  }
+
+  .tag {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82em;
+    font-weight: 500;
+  }
+  .tag-bach { background: rgba(78,205,196,0.15); color: var(--bach); }
+  .tag-chopin { background: rgba(255,107,157,0.15); color: var(--chopin); }
+  .tag-floyd { background: rgba(199,125,255,0.15); color: var(--floyd); }
+
+  /* ── Dimension Explorer ── */
+  .dim-explorer {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 0;
+    background: var(--surface);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    min-height: 420px;
+  }
+
+  .dim-list {
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 8px 0;
+  }
+
+  .dim-item {
+    padding: 10px 16px;
+    cursor: pointer;
+    font-size: 0.88em;
+    transition: background 0.15s;
+    border-left: 3px solid transparent;
+  }
+
+  .dim-item:hover { background: var(--surface2); }
+  .dim-item.active {
+    background: var(--surface2);
+    border-left-color: var(--floyd);
+    font-weight: 500;
+  }
+
+  .dim-detail {
+    padding: 28px;
+  }
+
+  .dim-detail h3 {
+    font-size: 1.15em;
+    margin-bottom: 4px;
+  }
+
+  .dim-detail .dim-desc {
+    color: var(--text-dim);
+    font-size: 0.9em;
+    margin-bottom: 24px;
+  }
+
+  .strip-chart {
+    margin-bottom: 20px;
+  }
+
+  .strip-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 12px;
+  }
+
+  .strip-label {
+    width: 70px;
+    font-size: 0.85em;
+    font-weight: 500;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .strip-track {
+    flex: 1;
+    height: 32px;
+    background: var(--surface2);
+    border-radius: 6px;
+    position: relative;
+    overflow: visible;
+  }
+
+  .strip-range {
+    position: absolute;
+    top: 4px;
+    height: 24px;
+    border-radius: 4px;
+    opacity: 0.35;
+  }
+
+  .strip-mean {
+    position: absolute;
+    top: 2px;
+    width: 3px;
+    height: 28px;
+    border-radius: 2px;
+    transform: translateX(-1px);
+  }
+
+  .strip-point {
+    position: absolute;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    border: 2px solid var(--bg);
+    z-index: 2;
+  }
+
+  .strip-axis {
+    display: flex;
+    justify-content: space-between;
+    padding-left: 82px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75em;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  .strip-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-top: 20px;
+  }
+
+  .stat-box {
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+  }
+
+  .stat-box .stat-label {
+    font-size: 0.78em;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+
+  .stat-box .stat-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.1em;
+    font-weight: 600;
+  }
+
+  .caveat {
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: rgba(255,214,10,0.06);
+    border: 1px solid rgba(255,214,10,0.15);
+    border-radius: 8px;
+    font-size: 0.85em;
+    color: #ccc;
+  }
+
+  @media (max-width: 768px) {
+    .dna-grid { grid-template-columns: 1fr; }
+    .mode-grid { grid-template-columns: 1fr; }
+    .dim-explorer { grid-template-columns: 1fr; }
+    .dim-list { border-right: none; border-bottom: 1px solid var(--border); max-height: 200px; }
+    .radar-container { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>Three-Style DNA Digest</h1>
+    <div class="subtitle">Bach / Chopin / Pink Floyd — 10 Dimensions, 22 Tracks</div>
+  </header>
+
+  <!-- ══ Section 1: Radar ══ -->
+  <div class="section">
+    <div class="section-title">Style Fingerprints</div>
+    <div class="radar-container">
+      <canvas id="radar" width="600" height="600"></canvas>
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-dot" style="background: var(--bach)"></div>
+          <div>
+            <div class="legend-label">Bach</div>
+            <div class="legend-desc">5 themes, 10-32 notes</div>
+          </div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background: var(--chopin)"></div>
+          <div>
+            <div class="legend-label">Chopin / Romantic</div>
+            <div class="legend-desc">5 themes, 16 notes</div>
+          </div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background: var(--floyd)"></div>
+          <div>
+            <div class="legend-label">Pink Floyd</div>
+            <div class="legend-desc">12 tracks, 7 songs, real MIDI</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Section 2: DNA Cards ══ -->
+  <div class="section">
+    <div class="section-title">Style DNA — Signature Traits (effect > 1.5&sigma;)</div>
+    <div class="dna-grid" id="dna-grid"></div>
+  </div>
+
+  <!-- ══ Section 3: Dimension Explorer ══ -->
+  <div class="section">
+    <div class="section-title">Dimension Explorer</div>
+    <div class="dim-explorer">
+      <div class="dim-list" id="dim-list"></div>
+      <div class="dim-detail" id="dim-detail">
+        <p style="color:var(--text-dim)">Select a dimension to explore</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Section 4: Overlap Matrix ══ -->
+  <div class="section">
+    <div class="section-title">Fusion Zone — Overlap Analysis</div>
+    <table class="overlap-table" id="overlap-table">
+      <thead>
+        <tr>
+          <th>Dimension</th>
+          <th>Overlap Range</th>
+          <th>Overlap %</th>
+          <th>Verdict</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- ══ Section 5: Mode Distribution ══ -->
+  <div class="section">
+    <div class="section-title">Mode / Scale Distribution</div>
+    <div class="mode-grid" id="mode-grid"></div>
+  </div>
+
+  <!-- ══ Section 6: Insights ══ -->
+  <div class="section">
+    <div class="insight-box">
+      <h3>What This Tells Us</h3>
+      <div class="insight-item">
+        <strong>Fusion is not intersection.</strong> Only 5 of 15 key dimensions have meaningful overlap across all three styles. You can't average them — you have to <em>select</em> different dimensions from each.
+      </div>
+      <div class="insight-item">
+        <strong>The density sweet spot.</strong> <span class="tag tag-bach">1.1</span> to <span class="tag tag-chopin">2.0</span> notes/beat is the only narrow zone where all three styles naturally coexist. This becomes the rhythmic foundation of any fusion.
+      </div>
+      <div class="insight-item">
+        <strong>Phrygian is the meeting point.</strong> <span class="tag tag-floyd">Floyd</span> is Phrygian-dominant (5/12), <span class="tag tag-chopin">Chopin</span> has Phrygian themes, and even <span class="tag tag-bach">Bach</span> uses it in minor keys. Phrygian or Dorian becomes the tonal home of fusion.
+      </div>
+      <div class="insight-item">
+        <strong>The recipe:</strong>
+        <span class="tag tag-bach">Bach's</span> motivic economy &amp; motor energy +
+        <span class="tag tag-chopin">Chopin's</span> long phrase arcs &amp; chromatic color +
+        <span class="tag tag-floyd">Floyd's</span> temporal contrast, wide range &amp; Phrygian darkness.
+      </div>
+      <div class="insight-item">
+        <strong>Caveat:</strong> Bach/Chopin samples are short themes (10-32 notes), Floyd is full tracks (37-375 notes). Longer excerpts naturally have wider ranges and more rhythmic variety. Ratio-based metrics (step ratio, tonal clarity, direction changes) are more trustworthy for comparison.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════════════════
+const STYLES = {
+  bach: {
+    label: 'Bach',
+    color: '#4ECDC4',
+    data: {
+      pitch_range: { mean: 9.8, std: 2.05, min: 8, max: 12 },
+      step_ratio: { mean: 0.631, std: 0.296, min: 0.129, max: 0.933 },
+      leap_ratio: { mean: 0.032, std: 0.030, min: 0, max: 0.067 },
+      direction_change_ratio: { mean: 0.546, std: 0.298, min: 0.214, max: 1.0 },
+      pitch_class_entropy: { mean: 2.463, std: 0.075, min: 2.351, max: 2.552 },
+      rhythm_entropy: { mean: 0.457, std: 0.441, min: 0, max: 0.997 },
+      rhythm_density: { mean: 3.075, std: 1.109, min: 1.111, max: 4.0 },
+      tonal_clarity: { mean: 0.777, std: 0.061, min: 0.679, max: 0.821 },
+      chromaticism: { mean: 0.0, std: 0.0, min: 0, max: 0 },
+      mean_run_length: { mean: 2.096, std: 1.029, min: 1.0, max: 3.75 },
+      duration_cv: { mean: 0.168, std: 0.148, min: 0, max: 0.333 },
+      duration_range_ratio: { mean: 0.424, std: 0.389, min: 0, max: 0.9 },
+      pitch_bigram_rep: { mean: 0.331, std: 0.183, min: 0.125, max: 0.643 },
+      rhythm_bigram_rep: { mean: 0.717, std: 0.367, min: 0.25, max: 1.0 },
+      mean_abs_interval: { mean: 2.737, std: 0.831, min: 2.0, max: 4.097 },
+    }
+  },
+  chopin: {
+    label: 'Chopin',
+    color: '#FF6B9D',
+    data: {
+      pitch_range: { mean: 10.2, std: 3.49, min: 5, max: 14 },
+      step_ratio: { mean: 0.720, std: 0.165, min: 0.533, max: 0.933 },
+      leap_ratio: { mean: 0.0, std: 0.0, min: 0, max: 0 },
+      direction_change_ratio: { mean: 0.289, std: 0.071, min: 0.214, max: 0.375 },
+      pitch_class_entropy: { mean: 2.581, std: 0.163, min: 2.406, max: 2.828 },
+      rhythm_entropy: { mean: 0.725, std: 0.455, min: 0, max: 1.159 },
+      rhythm_density: { mean: 1.513, std: 0.374, min: 1.0, max: 2.0 },
+      tonal_clarity: { mean: 0.711, std: 0.189, min: 0.413, max: 0.937 },
+      chromaticism: { mean: 0.150, std: 0.137, min: 0, max: 0.333 },
+      mean_run_length: { mean: 3.050, std: 0.660, min: 2.25, max: 3.75 },
+      duration_cv: { mean: 0.274, std: 0.158, min: 0, max: 0.436 },
+      duration_range_ratio: { mean: 0.902, std: 0.561, min: 0, max: 1.5 },
+      pitch_bigram_rep: { mean: 0.179, std: 0.107, min: 0.071, max: 0.364 },
+      rhythm_bigram_rep: { mean: 0.753, std: 0.344, min: 0.167, max: 1.0 },
+      mean_abs_interval: { mean: 1.947, std: 0.782, min: 0.8, max: 2.8 },
+    }
+  },
+  floyd: {
+    label: 'Pink Floyd',
+    color: '#C77DFF',
+    data: {
+      pitch_range: { mean: 27.42, std: 10.36, min: 16, max: 47 },
+      step_ratio: { mean: 0.421, std: 0.211, min: 0.107, max: 0.931 },
+      leap_ratio: { mean: 0.161, std: 0.195, min: 0.009, max: 0.626 },
+      direction_change_ratio: { mean: 0.617, std: 0.100, min: 0.479, max: 0.797 },
+      pitch_class_entropy: { mean: 2.685, std: 0.261, min: 2.177, max: 3.147 },
+      rhythm_entropy: { mean: 2.219, std: 0.850, min: 0.349, max: 3.514 },
+      rhythm_density: { mean: 1.100, std: 0.832, min: 0.288, max: 3.479 },
+      tonal_clarity: { mean: 0.779, std: 0.084, min: 0.606, max: 0.883 },
+      chromaticism: { mean: 0.245, std: 0.104, min: 0.125, max: 0.4 },
+      mean_run_length: { mean: 1.649, std: 0.249, min: 1.25, max: 2.064 },
+      duration_cv: { mean: 0.967, std: 0.390, min: 0.376, max: 1.583 },
+      duration_range_ratio: { mean: 4.976, std: 2.354, min: 1.116, max: 9.518 },
+      pitch_bigram_rep: { mean: 0.547, std: 0.226, min: 0.259, max: 0.966 },
+      rhythm_bigram_rep: { mean: 0.537, std: 0.250, min: 0.231, max: 1.0 },
+      mean_abs_interval: { mean: 4.548, std: 2.993, min: 1.454, max: 10.907 },
+    }
+  }
+};
+
+const DIMENSIONS = [
+  { key: 'pitch_range', label: 'Pitch Range', unit: 'semitones', desc: 'Total range from lowest to highest note', radarNorm: 50, lengthSensitive: true },
+  { key: 'step_ratio', label: 'Step Ratio', unit: '', desc: 'Fraction of intervals that are stepwise (1-2 semitones)', radarNorm: 1 },
+  { key: 'leap_ratio', label: 'Leap Ratio', unit: '', desc: 'Fraction of intervals > 5 semitones (P4+)', radarNorm: 0.7 },
+  { key: 'direction_change_ratio', label: 'Direction Changes', unit: '', desc: 'How often the melody reverses direction', radarNorm: 1 },
+  { key: 'pitch_class_entropy', label: 'Pitch Entropy', unit: 'bits', desc: 'Shannon entropy of pitch class distribution (chromatic variety)', radarNorm: 3.5 },
+  { key: 'rhythm_entropy', label: 'Rhythm Entropy', unit: 'bits', desc: 'Shannon entropy of IOI durations (rhythmic variety)', radarNorm: 4, lengthSensitive: true },
+  { key: 'rhythm_density', label: 'Rhythm Density', unit: 'n/beat', desc: 'Average number of note onsets per beat', radarNorm: 4.5 },
+  { key: 'tonal_clarity', label: 'Tonal Clarity', unit: '', desc: 'K-S correlation with best-matching key profile', radarNorm: 1 },
+  { key: 'chromaticism', label: 'Chromaticism', unit: '', desc: 'Fraction of notes outside detected diatonic scale', radarNorm: 0.5 },
+  { key: 'mean_run_length', label: 'Mean Run Length', unit: 'notes', desc: 'Average consecutive notes in same direction', radarNorm: 4 },
+  { key: 'duration_cv', label: 'Duration CV', unit: '', desc: 'Coefficient of variation of note durations', radarNorm: 2, lengthSensitive: true },
+  { key: 'duration_range_ratio', label: 'Duration Range Ratio', unit: '', desc: 'Ratio of longest to shortest note duration', radarNorm: 10, lengthSensitive: true },
+  { key: 'pitch_bigram_rep', label: 'Pitch Bigram Rep', unit: '', desc: 'Fraction of pitch bigrams that are repeats', radarNorm: 1 },
+  { key: 'rhythm_bigram_rep', label: 'Rhythm Bigram Rep', unit: '', desc: 'Fraction of rhythm bigrams that are repeats', radarNorm: 1 },
+  { key: 'mean_abs_interval', label: 'Mean Interval Size', unit: 'st', desc: 'Average absolute interval between consecutive notes', radarNorm: 12 },
+];
+
+// Radar subset (the most informative 10 dimensions)
+const RADAR_DIMS = [
+  'pitch_range', 'step_ratio', 'direction_change_ratio',
+  'rhythm_entropy', 'rhythm_density', 'tonal_clarity',
+  'chromaticism', 'mean_run_length', 'duration_cv', 'pitch_bigram_rep'
+];
+
+// ═══════════════════════════════════════════════════════════
+// RADAR CHART
+// ═══════════════════════════════════════════════════════════
+function drawRadar() {
+  const canvas = document.getElementById('radar');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = 600 * dpr;
+  canvas.height = 600 * dpr;
+  ctx.scale(dpr, dpr);
+
+  const cx = 300, cy = 300, R = 220;
+  const n = RADAR_DIMS.length;
+  const angleStep = (2 * Math.PI) / n;
+  const startAngle = -Math.PI / 2;
+
+  // Grid
+  for (let ring = 1; ring <= 5; ring++) {
+    const r = R * ring / 5;
+    ctx.beginPath();
+    for (let i = 0; i <= n; i++) {
+      const a = startAngle + i * angleStep;
+      const x = cx + r * Math.cos(a);
+      const y = cy + r * Math.sin(a);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.stroke();
+  }
+
+  // Spokes & labels
+  ctx.font = '11px Inter, sans-serif';
+  ctx.fillStyle = '#888';
+  ctx.textAlign = 'center';
+  for (let i = 0; i < n; i++) {
+    const a = startAngle + i * angleStep;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + R * Math.cos(a), cy + R * Math.sin(a));
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.stroke();
+
+    const dim = DIMENSIONS.find(d => d.key === RADAR_DIMS[i]);
+    const lx = cx + (R + 28) * Math.cos(a);
+    const ly = cy + (R + 28) * Math.sin(a);
+    ctx.textAlign = Math.abs(Math.cos(a)) < 0.1 ? 'center' : Math.cos(a) > 0 ? 'left' : 'right';
+    ctx.textBaseline = Math.abs(Math.sin(a)) < 0.1 ? 'middle' : Math.sin(a) > 0 ? 'top' : 'bottom';
+    ctx.fillText(dim.label, lx, ly);
+  }
+
+  // Draw each style
+  for (const [sKey, style] of Object.entries(STYLES)) {
+    const vals = RADAR_DIMS.map(dk => {
+      const dim = DIMENSIONS.find(d => d.key === dk);
+      return Math.min(1, style.data[dk].mean / dim.radarNorm);
+    });
+
+    // Fill
+    ctx.beginPath();
+    for (let i = 0; i <= n; i++) {
+      const idx = i % n;
+      const a = startAngle + idx * angleStep;
+      const r = R * vals[idx];
+      const x = cx + r * Math.cos(a);
+      const y = cy + r * Math.sin(a);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = style.color + '18';
+    ctx.fill();
+
+    // Stroke
+    ctx.beginPath();
+    for (let i = 0; i <= n; i++) {
+      const idx = i % n;
+      const a = startAngle + idx * angleStep;
+      const r = R * vals[idx];
+      const x = cx + r * Math.cos(a);
+      const y = cy + r * Math.sin(a);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = style.color + 'CC';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Points
+    for (let i = 0; i < n; i++) {
+      const a = startAngle + i * angleStep;
+      const r = R * vals[i];
+      ctx.beginPath();
+      ctx.arc(cx + r * Math.cos(a), cy + r * Math.sin(a), 4, 0, 2 * Math.PI);
+      ctx.fillStyle = style.color;
+      ctx.fill();
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// DNA CARDS
+// ═══════════════════════════════════════════════════════════
+function renderDNA() {
+  const grid = document.getElementById('dna-grid');
+
+  const dna = [
+    {
+      style: 'bach', label: 'Bach', color: 'var(--bach)',
+      traits: [
+        { name: 'Zero Chromaticism', val: '0.000', pct: 0, sigma: '-3.3σ', neg: true, desc: 'Pure diatonic — no notes outside the scale' },
+        { name: 'Low Duration CV', val: '0.168', pct: 8, sigma: '-2.2σ', neg: true, desc: 'Motor rhythm — all notes nearly equal length' },
+        { name: 'High Density', val: '3.08 n/beat', pct: 68, sigma: '+2.1σ', neg: false, desc: 'Constant running motion, perpetual 16ths' },
+        { name: 'Low Rhythm Entropy', val: '0.457 bits', pct: 11, sigma: '-2.0σ', neg: true, desc: 'Highly predictable rhythmic patterns' },
+      ]
+    },
+    {
+      style: 'chopin', label: 'Chopin / Romantic', color: 'var(--chopin)',
+      traits: [
+        { name: 'Low Direction Changes', val: '0.289', pct: 29, sigma: '-2.3σ', neg: true, desc: 'Long sweeping arcs — melody flows in one direction' },
+        { name: 'High Run Length', val: '3.05', pct: 76, sigma: '+1.9σ', neg: false, desc: 'Average 3 notes before changing direction' },
+        { name: 'Zero Leaps', val: '0.000', pct: 0, sigma: '-1.7σ', neg: true, desc: 'Pure stepwise motion — no jumps larger than P4' },
+        { name: 'Low Pitch Repetition', val: '0.179', pct: 18, sigma: '-1.7σ', neg: true, desc: 'Through-composed — never repeats itself' },
+      ]
+    },
+    {
+      style: 'floyd', label: 'Pink Floyd', color: 'var(--floyd)',
+      traits: [
+        { name: 'Extreme Duration CV', val: '0.967', pct: 48, sigma: '+2.8σ', neg: false, desc: 'Wild duration contrast — long sustains + short ornaments' },
+        { name: 'Huge Pitch Range', val: '27.4 st', pct: 57, sigma: '+2.8σ', neg: false, desc: 'Guitar solos spanning 3-4 octaves' },
+        { name: 'High Rhythm Entropy', val: '2.22 bits', pct: 56, sigma: '+2.7σ', neg: false, desc: 'Maximally varied rhythm — never predictable' },
+        { name: 'High Chromaticism', val: '0.245', pct: 49, sigma: '+2.0σ', neg: false, desc: 'Rich chromatic color outside the scale' },
+        { name: 'High Pitch Repetition', val: '0.547', pct: 55, sigma: '+1.6σ', neg: false, desc: 'Riff-based — repeating melodic/rhythmic cells' },
+        { name: 'High Direction Changes', val: '0.617', pct: 62, sigma: '+1.5σ', neg: false, desc: 'Constantly changing direction — angular lines' },
+      ]
+    }
+  ];
+
+  grid.innerHTML = dna.map(d => `
+    <div class="dna-card">
+      <h3><span class="dot" style="background:${d.color}"></span>${d.label}</h3>
+      ${d.traits.map(t => `
+        <div class="dna-trait">
+          <div class="trait-header">
+            <span class="trait-name">${t.name}</span>
+            <span class="trait-value">${t.val}</span>
+          </div>
+          <div class="trait-bar-bg">
+            <div class="trait-bar" style="width:${t.pct}%; background:${d.color}"></div>
+          </div>
+          <div class="trait-effect ${t.neg ? 'sigma-neg' : 'sigma-pos'}">${t.sigma} from global mean</div>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// DIMENSION EXPLORER
+// ═══════════════════════════════════════════════════════════
+function renderDimExplorer() {
+  const list = document.getElementById('dim-list');
+  list.innerHTML = DIMENSIONS.map((d, i) => `
+    <div class="dim-item${i === 0 ? ' active' : ''}" data-idx="${i}">${d.label}</div>
+  `).join('');
+
+  list.addEventListener('click', e => {
+    const item = e.target.closest('.dim-item');
+    if (!item) return;
+    list.querySelectorAll('.dim-item').forEach(el => el.classList.remove('active'));
+    item.classList.add('active');
+    showDimDetail(+item.dataset.idx);
+  });
+
+  showDimDetail(0);
+}
+
+function showDimDetail(idx) {
+  const dim = DIMENSIONS[idx];
+  const detail = document.getElementById('dim-detail');
+
+  // Find global min/max for scale
+  let gMin = Infinity, gMax = -Infinity;
+  for (const style of Object.values(STYLES)) {
+    const d = style.data[dim.key];
+    if (d.min < gMin) gMin = d.min;
+    if (d.max > gMax) gMax = d.max;
+  }
+  const pad = (gMax - gMin) * 0.15 || 0.5;
+  const lo = Math.max(0, gMin - pad);
+  const hi = gMax + pad;
+  const range = hi - lo || 1;
+
+  function pct(v) { return ((v - lo) / range * 100).toFixed(1); }
+
+  const strips = Object.entries(STYLES).map(([sKey, style]) => {
+    const d = style.data[dim.key];
+    return `
+      <div class="strip-row">
+        <div class="strip-label" style="color:${style.color}">${style.label}</div>
+        <div class="strip-track">
+          <div class="strip-range" style="left:${pct(d.min)}%; width:${Math.max(1, pct(d.max) - pct(d.min))}%; background:${style.color}"></div>
+          <div class="strip-mean" style="left:${pct(d.mean)}%; background:${style.color}"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Compute overlap
+  const ranges = Object.values(STYLES).map(s => [s.data[dim.key].min, s.data[dim.key].max]);
+  const overlapLo = Math.max(...ranges.map(r => r[0]));
+  const overlapHi = Math.min(...ranges.map(r => r[1]));
+  const hasOverlap = overlapLo < overlapHi;
+  const overlapWidth = hasOverlap ? (overlapHi - overlapLo) : 0;
+  const fullWidth = Math.max(...ranges.map(r => r[1])) - Math.min(...ranges.map(r => r[0]));
+  const overlapPct = fullWidth > 0 ? (overlapWidth / fullWidth * 100).toFixed(0) : 0;
+
+  detail.innerHTML = `
+    <h3>${dim.label}</h3>
+    <div class="dim-desc">${dim.desc}${dim.unit ? ' (' + dim.unit + ')' : ''}</div>
+    <div class="strip-chart">
+      ${strips}
+      <div class="strip-axis">
+        <span>${lo.toFixed(2)}</span>
+        <span>${((lo + hi) / 2).toFixed(2)}</span>
+        <span>${hi.toFixed(2)}</span>
+      </div>
+    </div>
+    <div class="strip-stats">
+      ${Object.entries(STYLES).map(([k, s]) => `
+        <div class="stat-box">
+          <div class="stat-label" style="color:${s.color}">${s.label}</div>
+          <div class="stat-val" style="color:${s.color}">${s.data[dim.key].mean.toFixed(3)}</div>
+          <div style="font-size:0.75em; color:var(--text-dim)">
+            [${s.data[dim.key].min.toFixed(2)} — ${s.data[dim.key].max.toFixed(2)}]
+          </div>
+        </div>
+      `).join('')}
+    </div>
+    <div style="margin-top:16px; text-align:center;">
+      <span class="overlap-pct ${hasOverlap ? (overlapPct > 25 ? 'overlap-high' : 'overlap-med') : 'overlap-none'}">
+        ${hasOverlap ? `Three-way overlap: ${overlapPct}%` : 'No three-way overlap'}
+        ${hasOverlap ? ` [${overlapLo.toFixed(2)} — ${overlapHi.toFixed(2)}]` : ''}
+      </span>
+    </div>
+    ${dim.lengthSensitive ? '<div class="caveat">This metric is length-sensitive. Floyd\'s full tracks (37-375 notes) may inflate values vs. Bach/Chopin short themes (10-32 notes).</div>' : ''}
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════
+// OVERLAP TABLE
+// ═══════════════════════════════════════════════════════════
+function renderOverlap() {
+  const tbody = document.querySelector('#overlap-table tbody');
+  const rows = DIMENSIONS.map(dim => {
+    const ranges = Object.values(STYLES).map(s => [s.data[dim.key].min, s.data[dim.key].max]);
+    const overlapLo = Math.max(...ranges.map(r => r[0]));
+    const overlapHi = Math.min(...ranges.map(r => r[1]));
+    const hasOverlap = overlapLo < overlapHi;
+    const overlapWidth = hasOverlap ? (overlapHi - overlapLo) : 0;
+    const fullWidth = Math.max(...ranges.map(r => r[1])) - Math.min(...ranges.map(r => r[0]));
+    const pct = fullWidth > 0 ? Math.round(overlapWidth / fullWidth * 100) : 0;
+
+    let cls = 'overlap-none', verdict = 'Separates';
+    if (pct > 25) { cls = 'overlap-high'; verdict = 'Shared zone'; }
+    else if (pct > 0) { cls = 'overlap-med'; verdict = 'Narrow overlap'; }
+
+    return `
+      <tr>
+        <td>${dim.label}${dim.lengthSensitive ? ' *' : ''}</td>
+        <td class="range-text">${hasOverlap ? `[${overlapLo.toFixed(2)}, ${overlapHi.toFixed(2)}]` : '—'}</td>
+        <td><span class="overlap-pct ${cls}">${pct}%</span></td>
+        <td style="color:${pct > 25 ? '#4ECDC4' : pct > 0 ? '#FFD60A' : '#FF6B9D'}">${verdict}</td>
+      </tr>
+    `;
+  });
+
+  tbody.innerHTML = rows.join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// MODE DISTRIBUTION
+// ═══════════════════════════════════════════════════════════
+function renderModes() {
+  const grid = document.getElementById('mode-grid');
+  const modeDist = {
+    bach: { Aeolian: 3, Lydian: 1, Mixolydian: 1 },
+    chopin: { Phrygian: 2, Lydian: 2, Mixolydian: 1 },
+    floyd: { Phrygian: 5, Aeolian: 3, Dorian: 2, Mixolydian: 1, Lydian: 1 }
+  };
+
+  const allModes = ['Phrygian', 'Aeolian', 'Dorian', 'Lydian', 'Mixolydian'];
+
+  grid.innerHTML = Object.entries(STYLES).map(([key, style]) => {
+    const dist = modeDist[key];
+    const total = Object.values(dist).reduce((a, b) => a + b, 0);
+    const maxCount = Math.max(...Object.values(dist));
+
+    return `
+      <div class="mode-card">
+        <h4><span class="dot" style="background:${style.color}; width:8px; height:8px; border-radius:50%; display:inline-block;"></span> ${style.label}</h4>
+        ${allModes.map(mode => {
+          const count = dist[mode] || 0;
+          if (count === 0) return '';
+          return `
+            <div class="mode-bar-row">
+              <div class="mode-name">${mode}</div>
+              <div class="mode-bar-outer">
+                <div class="mode-bar-inner" style="width:${count/total*100}%; background:${style.color}">${count}</div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+drawRadar();
+renderDNA();
+renderDimExplorer();
+renderOverlap();
+renderModes();
+</script>
+</body>
+</html>
